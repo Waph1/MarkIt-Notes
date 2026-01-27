@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-01-27
+### Changed
+- **Polish**: Globalized all hardcoded strings to `strings.xml`.
+- **Performance**: Added 300ms debounce to search for smoother typing.
+- **Refactor**: Extracted `SearchBar` component for cleaner code.
+- **UI**: Improved Search Bar visuals and menu icons.
+
 ## [0.2.0] - 2026-01-27
 ### Added
 - **Search Bar**: Users can now search notes by title and content.
