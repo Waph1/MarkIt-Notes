@@ -1,0 +1,21 @@
+package com.example.keepnotes.data.repository
+
+import com.example.keepnotes.data.model.Note
+import kotlinx.coroutines.flow.Flow
+
+interface NoteRepository {
+    fun getAllNotes(): Flow<List<Note>>
+    suspend fun getNote(id: String): Note?
+    suspend fun saveNote(note: Note, oldFile: java.io.File? = null)
+    suspend fun deleteNote(id: String)
+    suspend fun deleteNotes(noteIds: List<String>)
+    
+    suspend fun archiveNote(id: String)
+    suspend fun archiveNotes(noteIds: List<String>)
+    suspend fun setNoteColor(id: String, color: Long)
+    suspend fun togglePinStatus(noteIds: List<String>, isPinned: Boolean)
+    
+    suspend fun restoreNote(id: String)
+    suspend fun moveNotes(notes: List<Note>, targetFolder: String)
+    suspend fun setRootFolder(uriString: String)
+}

@@ -1,0 +1,267 @@
+package com.example.keepnotes.ui
+
+import android.net.Uri
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.keepnotes.data.model.Note
+import com.example.keepnotes.data.repository.FileNoteRepository
+import com.example.keepnotes.data.repository.MetadataManager
+import com.example.keepnotes.data.repository.PrefsManager
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+
+class MainViewModel(
+    private val repository: FileNoteRepository,
+    private val metadataManager: MetadataManager,
+    private val prefsManager: PrefsManager
+) : ViewModel() {
+
+    sealed interface NoteFilter {
+        object All : NoteFilter
+        data class Label(val name: String) : NoteFilter
+        object Archive : NoteFilter
+        object Trash : NoteFilter
+    }
+
+    private val _currentFilter = MutableStateFlow<NoteFilter>(NoteFilter.All)
+    val currentFilter: StateFlow<NoteFilter> = _currentFilter.asStateFlow()
+
+    private val _sortOrder = MutableStateFlow(prefsManager.getSortOrder())
+    val sortOrder: StateFlow<PrefsManager.SortOrder> = _sortOrder.asStateFlow()
+
+    private val _sortDirection = MutableStateFlow(prefsManager.getSortDirection())
+    val sortDirection: StateFlow<PrefsManager.SortDirection> = _sortDirection.asStateFlow()
+
+    val notes: StateFlow<List<Note>> = combine(
+        repository.getAllNotes(),
+        _currentFilter,
+        _sortOrder,
+        _sortDirection
+    ) { allNotes, filter, order, direction ->
+        val filtered = when (filter) {
+            is NoteFilter.All -> allNotes.filter { !it.isArchived && !it.isTrashed }
+            is NoteFilter.Label -> allNotes.filter { it.folder == filter.name && !it.isTrashed }
+            is NoteFilter.Archive -> allNotes.filter { it.isArchived && !it.isTrashed }
+            is NoteFilter.Trash -> allNotes.filter { it.isTrashed }
+        }
+        
+        val sorted = when (order) {
+            PrefsManager.SortOrder.DATE_CREATED,
+            PrefsManager.SortOrder.DATE_MODIFIED -> filtered.sortedBy { it.lastModified }
+            PrefsManager.SortOrder.TITLE -> filtered.sortedBy { it.title.lowercase() }
+        }
+
+        val directed = if (direction == PrefsManager.SortDirection.DESCENDING) {
+            sorted.reversed()
+        } else {
+            sorted
+        }
+        
+        // Pinned notes always on top
+        directed.sortedByDescending { it.isPinned }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Derive labels from notes (excluding system folders)
+    // User wants to see labels. If they created a folder "Personal", it should show up.
+    // Logic: it != "Unknown" && it != "Inbox" && !it.startsWith(".")
+    // If they only have Inbox, this is empty.
+    // If they have "Personal", it should show.
+    // Maybe `getAllNotes` isn't returning the correct path?
+    // In FileNoteRepository refresher: Note(file = java.io.File(folder.name, ...)) where folder is from `root.listFiles()`.
+    // java.io.File("Personal", "foo.md").parent is "Personal".
+    // So logic seems sound IF folders exist.
+    // Perhaps `repository.getAllNotes()` is empty initially?
+    // Yes, _notes is emptyList() initially.
+    // And refreshNotes is forced in `setRootFolder`.
+    
+    val labels: StateFlow<List<String>> = repository.getAllNotes().map { noteList ->
+        noteList.map { it.folder }
+            .filter { it != "Unknown" && !it.startsWith(".") }
+            .distinct().sorted()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    
+    // UI State
+    // Default to TRUE, but check immediately on init
+    private val _isPermissionNeeded = MutableStateFlow(prefsManager.getRootUri() == null)
+    val isPermissionNeeded: StateFlow<Boolean> = _isPermissionNeeded.asStateFlow()
+
+    init {
+        // Auto-load
+        val savedUriStr = prefsManager.getRootUri()
+        if (savedUriStr != null) {
+            setRootFolder(Uri.parse(savedUriStr))
+        }
+    }
+
+    private val _currentNote = MutableStateFlow<Note?>(null)
+    val currentNote: StateFlow<Note?> = _currentNote.asStateFlow()
+
+    private val _isEditorOpen = MutableStateFlow(false)
+    val isEditorOpen: StateFlow<Boolean> = _isEditorOpen.asStateFlow()
+
+    fun setRootFolder(uri: Uri) {
+        viewModelScope.launch {
+            repository.setRootFolder(uri.toString())
+            _isPermissionNeeded.value = false
+        }
+    }
+
+    fun resetPermissionNeeded() {
+        _isPermissionNeeded.value = true
+    }
+
+    fun openNote(note: Note) {
+        _currentNote.value = note
+        _isEditorOpen.value = true
+    }
+
+    fun createNote() {
+        _currentNote.value = null // New note
+        _isEditorOpen.value = true
+    }
+
+    fun closeEditor() {
+        _isEditorOpen.value = false
+        _currentNote.value = null
+    }
+    
+    fun setFilter(filter: NoteFilter) {
+        _currentFilter.value = filter
+    }
+
+    fun deleteNote(note: Note) {
+        viewModelScope.launch {
+            repository.deleteNote(note.file.name) 
+        }
+    }
+    
+    fun archiveNote(note: Note) {
+         viewModelScope.launch {
+            repository.archiveNote(note.file.name)
+        }
+    }
+
+    fun restoreNote(note: Note) {
+        viewModelScope.launch {
+            repository.restoreNote(note.file.name)
+        }
+    }
+
+    fun saveNote(note: Note, oldFile: java.io.File? = null) {
+        viewModelScope.launch {
+            repository.saveNote(note, oldFile)
+        }
+    }
+
+    fun setSortOrder(order: PrefsManager.SortOrder) {
+        _sortOrder.value = order
+        prefsManager.saveSortOrder(order)
+    }
+
+    fun setSortDirection(direction: PrefsManager.SortDirection) {
+        _sortDirection.value = direction
+        prefsManager.saveSortDirection(direction)
+    }
+    // Multi-Selection State
+    private val _selectedNotes = MutableStateFlow<Set<String>>(emptySet())
+    val selectedNotes: StateFlow<Set<String>> = _selectedNotes.asStateFlow()
+
+    fun toggleSelection(note: Note) {
+        val current = _selectedNotes.value.toMutableSet()
+        if (current.contains(note.file.path)) {
+            current.remove(note.file.path)
+        } else {
+            current.add(note.file.path)
+        }
+        _selectedNotes.value = current
+    }
+
+    fun clearSelection() {
+        _selectedNotes.value = emptySet()
+    }
+
+    fun deleteSelectedNotes() {
+        val selected = _selectedNotes.value.toList()
+        clearSelection() // Clear immediately for responsiveness
+        viewModelScope.launch {
+            repository.deleteNotes(selected)
+        }
+    }
+
+    fun archiveSelectedNotes() {
+        val selected = _selectedNotes.value.toList()
+        clearSelection() // Clear immediately
+        viewModelScope.launch {
+            repository.archiveNotes(selected)
+        }
+    }
+
+    fun restoreSelectedNotes() {
+        val selected = _selectedNotes.value.toList()
+        clearSelection()
+        viewModelScope.launch {
+            // Restore doesn't have a bulk op yet in generic interface?
+            // FileNoteRepository has restoreNote(id).
+            // Let's implement bulk restore or loop.
+            // Loop for now is fine as restore is rarer, OR valid bulk op.
+            // Check Repository.
+            // Repository interface: restoreNote(id). No restoreNotes.
+            // Loop:
+            selected.forEach { repository.restoreNote(it) }
+        }
+    }
+
+    // Move Selected
+    fun moveSelectedNotes(targetLabel: String) {
+        val selectedIds = _selectedNotes.value.toSet() 
+        val currentNotesList = notes.value 
+        // Filter using file.path (ID)
+        val notesToMove = currentNotesList.filter { selectedIds.contains(it.file.path) }
+        
+        clearSelection()
+        
+        viewModelScope.launch {
+            val targetFolder = if (targetLabel.isEmpty()) "Inbox" else targetLabel
+            repository.moveNotes(notesToMove, targetFolder)
+        }
+    }
+    
+    fun updateSelectedNotesColor(color: Long) {
+        val selectedIds = _selectedNotes.value.toList()
+        val currentNotesList = notes.value
+        val notesToUpdate = currentNotesList.filter { selectedIds.contains(it.file.path) }
+        
+        clearSelection()
+        
+        viewModelScope.launch {
+            notesToUpdate.forEach { note ->
+                repository.setNoteColor(note.file.name, color)
+            }
+        }
+    }
+
+    fun togglePinSelectedNotes() {
+        val selectedIds = _selectedNotes.value.toList()
+        val currentNotesList = notes.value
+        val notesToUpdate = currentNotesList.filter { selectedIds.contains(it.file.path) }
+        
+        // Logical check: If ANY selected are unpinned, PIN ALL. Else UNPIN ALL.
+        val shouldPin = notesToUpdate.any { !it.isPinned }
+        
+        clearSelection()
+        
+        viewModelScope.launch {
+             // Pass IDs. Repository expects "paths" or "names"? 
+             // FileNoteRepository checks contains(file.path) || contains(file.name).
+             // safest is passing paths.
+             repository.togglePinStatus(selectedIds, shouldPin)
+        }
+    }
+}
