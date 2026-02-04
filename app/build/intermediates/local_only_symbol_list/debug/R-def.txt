@@ -1,8 +1,33 @@
 R_DEF: Internal format may change without notice
 local
-drawable ic_launcher
-drawable ic_launcher_round
+color black
+color ic_launcher_background
+color purple_200
+color purple_500
+color purple_700
+color teal_200
+color teal_700
+color white
+drawable ic_launcher_foreground
+mipmap ic_launcher
+mipmap ic_launcher_round
+string add_note
 string app_name
+string clear_search
+string folder_access_needed
+string folder_access_rationale
+string grant_access
+string menu
+string search_hint
+string select_folder
+string sort_ascending
+string sort_date_created
+string sort_date_modified
+string sort_descending
+string sort_notes
+string sort_title
+string welcome_message
+string welcome_title
 style Theme.KeepNotes
 xml backup_rules
 xml data_extraction_rules

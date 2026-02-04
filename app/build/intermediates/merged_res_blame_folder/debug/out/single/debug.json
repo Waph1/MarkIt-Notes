@@ -1,7 +1,15 @@
 [
     {
-        "merged": "com.waph1.markit.app-merged_res-54:/drawable_ic_launcher.png.flat",
-        "source": "com.waph1.markit.app-main-56:/drawable/ic_launcher.png"
+        "merged": "com.waph1.markit.app-merged_res-54:/drawable_ic_launcher_foreground.png.flat",
+        "source": "com.waph1.markit.app-main-56:/drawable/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.waph1.markit.app-merged_res-54:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "com.waph1.markit.app-main-56:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.waph1.markit.app-merged_res-54:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.waph1.markit.app-main-56:/mipmap-anydpi-v26/ic_launcher.xml"
     },
     {
         "merged": "com.waph1.markit.app-merged_res-54:/xml_data_extraction_rules.xml.flat",
@@ -10,9 +18,5 @@
     {
         "merged": "com.waph1.markit.app-merged_res-54:/xml_backup_rules.xml.flat",
         "source": "com.waph1.markit.app-main-56:/xml/backup_rules.xml"
-    },
-    {
-        "merged": "com.waph1.markit.app-merged_res-54:/drawable_ic_launcher_round.png.flat",
-        "source": "com.waph1.markit.app-main-56:/drawable/ic_launcher_round.png"
     }
 ]

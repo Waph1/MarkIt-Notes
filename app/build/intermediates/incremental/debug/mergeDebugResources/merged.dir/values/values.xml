@@ -20,6 +20,7 @@
     <color name="background_floating_material_light">@android:color/white</color>
     <color name="background_material_dark">@color/material_grey_850</color>
     <color name="background_material_light">@color/material_grey_50</color>
+    <color name="black">#FF000000</color>
     <color name="bright_foreground_disabled_material_dark">#80ffffff</color>
     <color name="bright_foreground_disabled_material_light">#80000000</color>
     <color name="bright_foreground_inverse_material_dark">@color/bright_foreground_material_light</color>
@@ -40,6 +41,7 @@
     <color name="foreground_material_light">@android:color/black</color>
     <color name="highlighted_text_material_dark">#6680cbc4</color>
     <color name="highlighted_text_material_light">#66009688</color>
+    <color name="ic_launcher_background">#202124</color>
     <color name="material_blue_grey_800">#ff37474f</color>
     <color name="material_blue_grey_900">#ff263238</color>
     <color name="material_blue_grey_950">#ff21272b</color>
@@ -62,6 +64,9 @@
     <color name="primary_text_default_material_light">#de000000</color>
     <color name="primary_text_disabled_material_dark">#4Dffffff</color>
     <color name="primary_text_disabled_material_light">#39000000</color>
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
     <color name="ripple_material_dark">#33ffffff</color>
     <color name="ripple_material_light">#1f000000</color>
     <color name="secondary_text_default_material_dark">#b3ffffff</color>
@@ -72,8 +77,11 @@
     <color name="switch_thumb_disabled_material_light">#ffbdbdbd</color>
     <color name="switch_thumb_normal_material_dark">#ffbdbdbd</color>
     <color name="switch_thumb_normal_material_light">#fff1f1f1</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
     <color name="tooltip_background_dark">#e6616161</color>
     <color name="tooltip_background_light">#e6FFFFFF</color>
+    <color name="white">#FFFFFFFF</color>
     <dimen name="abc_action_bar_content_inset_material">16dp</dimen>
     <dimen name="abc_action_bar_content_inset_with_nav">72dp</dimen>
     <dimen name="abc_action_bar_default_height_material">56dp</dimen>
@@ -308,6 +316,7 @@
     <string name="abc_shareactionprovider_share_with">Share with</string>
     <string name="abc_shareactionprovider_share_with_application">Share with <ns1:g example="Mail" id="application_name">%s</ns1:g></string>
     <string name="abc_toolbar_collapse_description">Collapse</string>
+    <string name="add_note">Add Note</string>
     <string name="androidx_startup" translatable="false">androidx.startup</string>
     <string name="app_name">MarkIt</string>
     <string name="call_notification_answer_action">Answer</string>
@@ -317,11 +326,15 @@
     <string name="call_notification_incoming_text">Incoming call</string>
     <string name="call_notification_ongoing_text">Ongoing call</string>
     <string name="call_notification_screening_text">Screening an incoming call</string>
+    <string name="clear_search">Clear Search</string>
     <string name="close_drawer">"Close navigation menu"</string>
     <string name="close_sheet">"Close sheet"</string>
     <string name="default_error_message">"Invalid input"</string>
     <string name="default_popup_window_title" ns2:ignore="ExtraTranslation">"Pop-Up Window"</string>
     <string name="dropdown_menu">"Dropdown menu"</string>
+    <string name="folder_access_needed">Folder Access Needed</string>
+    <string name="folder_access_rationale">MarkIt needs access to a folder to read and save your markdown notes.</string>
+    <string name="grant_access">Grant Access</string>
     <string name="in_progress">In progress</string>
     <string name="indeterminate">Partially checked</string>
     <string name="m3c_bottom_sheet_collapse_description">Collapse bottom sheet</string>
@@ -384,20 +397,31 @@
     <string name="m3c_time_picker_pm">PM</string>
     <string name="m3c_tooltip_long_press_label">Show tooltip</string>
     <string name="m3c_tooltip_pane_description">Tooltip</string>
+    <string name="menu">Menu</string>
     <string name="navigation_menu">"Navigation menu"</string>
     <string name="not_selected">Not selected</string>
     <string name="off">Off</string>
     <string name="on">On</string>
     <string name="range_end">"Range end"</string>
     <string name="range_start">"Range start"</string>
+    <string name="search_hint">Search in MarkIt</string>
     <string name="search_menu_title">Search</string>
+    <string name="select_folder">Select Folder</string>
     <string name="selected">Selected</string>
+    <string name="sort_ascending">Ascending</string>
+    <string name="sort_date_created">Date Created</string>
+    <string name="sort_date_modified">Date Modified</string>
+    <string name="sort_descending">Descending</string>
+    <string name="sort_notes">Sort Notes</string>
+    <string name="sort_title">Title</string>
     <string name="status_bar_notification_info_overflow">999+</string>
     <string name="switch_role">Switch</string>
     <string name="tab">Tab</string>
     <string name="template_percent"><ns1:g id="percentage">%1$d</ns1:g> percent.</string>
     <string name="tooltip_description">tooltip</string>
     <string name="tooltip_label">show tooltip</string>
+    <string name="welcome_message">To get started, please select a folder where your notes will be stored. You own your data!</string>
+    <string name="welcome_title">Welcome to MarkIt!</string>
     <style name="AlertDialog.AppCompat" parent="Base.AlertDialog.AppCompat"/>
     <style name="AlertDialog.AppCompat.Light" parent="Base.AlertDialog.AppCompat.Light"/>
     <style name="Animation.AppCompat.Dialog" parent="Base.Animation.AppCompat.Dialog"/>

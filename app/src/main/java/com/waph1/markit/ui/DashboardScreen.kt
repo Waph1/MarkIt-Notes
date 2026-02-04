@@ -198,114 +198,14 @@ fun DashboardScreen(
                                 color = MaterialTheme.colorScheme.surfaceVariant,
                                 tonalElevation = 2.dp
                             ) {
-                                val searchQuery by viewModel.searchQuery.collectAsState()
 
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    // Search Input
-                                    androidx.compose.foundation.text.BasicTextField(
-                                        value = searchQuery,
-                                        onValueChange = { viewModel.onSearchQueryChanged(it) },
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .padding(horizontal = 8.dp),
-                                        singleLine = true,
-                                        textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        ),
-                                        cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
-                                        decorationBox = { innerTextField ->
-                                            Box(contentAlignment = Alignment.CenterStart) {
-                                                if (searchQuery.isEmpty()) {
-                                                    Text(
-                                                        text = "Search in MarkIt",
-                                                        style = MaterialTheme.typography.bodyLarge,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                                    )
-                                                }
-                                                innerTextField()
-                                            }
-                                        }
-                                    )
-                                    
-                                    // Clear Button (only if text exists)
-                                    if (searchQuery.isNotEmpty()) {
-                                        androidx.compose.material3.IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                                            Icon(
-                                                imageVector = androidx.compose.material.icons.Icons.Default.Close,
-                                                contentDescription = "Clear Search",
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
 
-                                    // Sort Button (Right Edge)
-                                    Box {
-                                        androidx.compose.material3.IconButton(onClick = { showSortMenu = true }) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.padding(horizontal = 4.dp)
-                                            ) {
-                                                 Icon(
-                                                     imageVector = androidx.compose.material.icons.Icons.Default.SwapVert,
-                                                     contentDescription = "Sort Notes",
-                                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                                 )
-                                            }
-                                        }
-                                        
-                                        DropdownMenu(
-                                            expanded = showSortMenu,
-                                            onDismissRequest = { showSortMenu = false }
-                                        ) {
-                                             DropdownMenuItem(
-                                                 text = { Text("Date Modified") },
-                                                 onClick = { 
-                                                     viewModel.setSortOrder(PrefsManager.SortOrder.DATE_MODIFIED)
-                                                     showSortMenu = false
-                                                 }
-                                             )
-                                             DropdownMenuItem(
-                                                 text = { Text("Date Created") },
-                                                 onClick = { 
-                                                     viewModel.setSortOrder(PrefsManager.SortOrder.DATE_CREATED)
-                                                     showSortMenu = false
-                                                 }
-                                             )
-                                             DropdownMenuItem(
-                                                 text = { Text("Title") },
-                                                 onClick = { 
-                                                     viewModel.setSortOrder(PrefsManager.SortOrder.TITLE)
-                                                     showSortMenu = false
-                                                 }
-                                             )
-                                             androidx.compose.material3.Divider()
-                                             DropdownMenuItem(
-                                                 text = { Text("Ascending") },
-                                                 onClick = { 
-                                                     viewModel.setSortDirection(PrefsManager.SortDirection.ASCENDING)
-                                                     showSortMenu = false
-                                                 }
-                                             )
-                                             DropdownMenuItem(
-                                                 text = { Text("Descending") },
-                                                 onClick = { 
-                                                     viewModel.setSortDirection(PrefsManager.SortDirection.DESCENDING)
-                                                     showSortMenu = false
-                                                 }
-                                             )
-                                        }
-                                    }
-                                }
+                                SearchBar(viewModel = viewModel)
                             }
                         },
                         navigationIcon = {
                              androidx.compose.material3.IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                 Icon(Icons.Default.Menu, contentDescription = "Menu")
+                                 Icon(Icons.Default.Menu, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.menu))
                              }
                         },
                         actions = {
@@ -320,7 +220,7 @@ fun DashboardScreen(
             floatingActionButton = {
                 if (!isPermissionNeeded && currentFilter !is MainViewModel.NoteFilter.Trash && currentFilter !is MainViewModel.NoteFilter.Archive) {
                     FloatingActionButton(onClick = onFabClick) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Note")
+                        Icon(Icons.Default.Add, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.add_note))
                     }
                 }
             }
@@ -371,17 +271,17 @@ fun PermissionRequestState(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "Welcome to KeepNotes!",
+            text = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.welcome_title),
             style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier.padding(bottom = 16.dp)
         )
         Text(
-            text = "To get started, please select a folder where your notes will be stored. You own your data!",
+            text = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.welcome_message),
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(bottom = 24.dp)
         )
         Button(onClick = onSelectFolder) {
-            Text("Select Root Folder")
+            Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.select_folder))
         }
     }
 }

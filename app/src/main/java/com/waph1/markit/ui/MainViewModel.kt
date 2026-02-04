@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -48,6 +50,8 @@ class MainViewModel(
         _sortOrder,
         _sortDirection,
         _searchQuery
+            .debounce(300L)
+            .distinctUntilChanged()
     ) { allNotes, filter, order, direction, query ->
         val filtered = when (filter) {
             is NoteFilter.All -> allNotes.filter { !it.isArchived && !it.isTrashed }

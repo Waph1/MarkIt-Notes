@@ -1,3 +1,19 @@
 <resources>
     <string name="app_name">MarkIt</string>
+    <string name="search_hint">Search in MarkIt</string>
+    <string name="clear_search">Clear Search</string>
+    <string name="sort_notes">Sort Notes</string>
+    <string name="sort_date_modified">Date Modified</string>
+    <string name="sort_date_created">Date Created</string>
+    <string name="sort_title">Title</string>
+    <string name="sort_ascending">Ascending</string>
+    <string name="sort_descending">Descending</string>
+    <string name="menu">Menu</string>
+    <string name="add_note">Add Note</string>
+    <string name="welcome_title">Welcome to MarkIt!</string>
+    <string name="welcome_message">To get started, please select a folder where your notes will be stored. You own your data!</string>
+    <string name="select_folder">Select Folder</string>
+    <string name="folder_access_needed">Folder Access Needed</string>
+    <string name="folder_access_rationale">MarkIt needs access to a folder to read and save your markdown notes.</string>
+    <string name="grant_access">Grant Access</string>
 </resources>

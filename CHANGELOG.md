@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2] - 2026-02-04
+### Changed
+- **UI**: Updated App Icon to "Adaptive Icon" format.
+- **UI**: Removed white border from app icon by using a dark background (`#202124`).
+
 ## [0.2.1] - 2026-01-27
 ### Changed
 - **Polish**: Globalized all hardcoded strings to `strings.xml`.
