@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +35,8 @@ fun SearchBar(
     viewModel: MainViewModel
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val sortOrder by viewModel.sortOrder.collectAsState()
+    val sortDirection by viewModel.sortDirection.collectAsState()
     var showSortMenu by remember { mutableStateOf(false) }
 
     Row(
@@ -41,7 +45,7 @@ fun SearchBar(
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Search Input
+        // ... (Search Input and Clear Button remain the same)
         BasicTextField(
             value = searchQuery,
             onValueChange = { viewModel.onSearchQueryChanged(it) },
@@ -67,7 +71,6 @@ fun SearchBar(
             }
         )
 
-        // Clear Button (only if text exists)
         if (searchQuery.isNotEmpty()) {
             IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
                 Icon(
@@ -99,6 +102,7 @@ fun SearchBar(
             ) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.sort_date_modified)) },
+                    trailingIcon = { if (sortOrder == PrefsManager.SortOrder.DATE_MODIFIED) Icon(Icons.Default.Check, null) },
                     onClick = {
                         viewModel.setSortOrder(PrefsManager.SortOrder.DATE_MODIFIED)
                         showSortMenu = false
@@ -106,6 +110,7 @@ fun SearchBar(
                 )
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.sort_date_created)) },
+                    trailingIcon = { if (sortOrder == PrefsManager.SortOrder.DATE_CREATED) Icon(Icons.Default.Check, null) },
                     onClick = {
                         viewModel.setSortOrder(PrefsManager.SortOrder.DATE_CREATED)
                         showSortMenu = false
@@ -113,14 +118,16 @@ fun SearchBar(
                 )
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.sort_title)) },
+                    trailingIcon = { if (sortOrder == PrefsManager.SortOrder.TITLE) Icon(Icons.Default.Check, null) },
                     onClick = {
                         viewModel.setSortOrder(PrefsManager.SortOrder.TITLE)
                         showSortMenu = false
                     }
                 )
-                androidx.compose.material3.Divider()
+                androidx.compose.material3.HorizontalDivider()
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.sort_ascending)) },
+                    trailingIcon = { if (sortDirection == PrefsManager.SortDirection.ASCENDING) Icon(Icons.Default.Check, null) },
                     onClick = {
                         viewModel.setSortDirection(PrefsManager.SortDirection.ASCENDING)
                         showSortMenu = false
@@ -128,6 +135,7 @@ fun SearchBar(
                 )
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.sort_descending)) },
+                    trailingIcon = { if (sortDirection == PrefsManager.SortDirection.DESCENDING) Icon(Icons.Default.Check, null) },
                     onClick = {
                         viewModel.setSortDirection(PrefsManager.SortDirection.DESCENDING)
                         showSortMenu = false

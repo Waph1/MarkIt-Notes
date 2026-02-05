@@ -1,34 +1,37 @@
 package com.waph1.markit.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.ime
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,33 +41,32 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
 import com.waph1.markit.data.model.Note
 import java.io.File
 import java.util.Date
-import androidx.activity.compose.BackHandler
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.TextRange
-import com.mohamedrejeb.richeditor.model.rememberRichTextState
-import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
-import com.mohamedrejeb.richeditor.model.RichTextState
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.runtime.LaunchedEffect
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun EditorScreen(
     viewModel: MainViewModel,
@@ -74,57 +76,53 @@ fun EditorScreen(
     val labels by viewModel.labels.collectAsState()
     
     var title by remember { mutableStateOf(currentNote?.title ?: "") }
-    
-    // Raw Content State (for Code Mode)
-    var rawContent by remember { mutableStateOf(TextFieldValue(currentNote?.content ?: "")) }
-    // Rich Content State (for WYSIWYG Mode)
-    val richTextState = rememberRichTextState()
-    // Track initial parsed content to avoid false-positive saves due to library normalization
-    var initialParsedContent by remember { mutableStateOf<String?>(null) }
-    
+    var content by remember { mutableStateOf(TextFieldValue(currentNote?.content ?: "")) }
     var color by remember { mutableStateOf(currentNote?.color ?: 0xFFFFFFFF) }
     var folder by remember { mutableStateOf(currentNote?.folder?.takeIf { it != "Unknown" && it != "Inbox" } ?: "") }
     
     // UI States
     var showLabelMenu by remember { mutableStateOf(false) }
-    var bottomBarState by remember { mutableStateOf(BottomBarState.DEFAULT) }
-    var isCodeMode by remember { mutableStateOf(false) }
-
-    // Initialize Rich Text State
+    var showColorPicker by remember { mutableStateOf(false) }
+    
+    // Mode: New notes start in Edit, existing in View
+    var isEditing by remember { mutableStateOf(currentNote == null) }
+    
+    // Long-press menu states
+    var showHeadingMenu by remember { mutableStateOf(false) }
+    var showMathMenu by remember { mutableStateOf(false) }
+    
+    // Initialize content from note
     LaunchedEffect(currentNote) {
         if (currentNote != null) {
-            richTextState.setMarkdown(currentNote!!.content)
-            rawContent = TextFieldValue(currentNote!!.content)
-            // Capture what the library thinks the markdown is immediately after load
-            initialParsedContent = richTextState.toMarkdown()
+            title = currentNote!!.title
+            content = TextFieldValue(currentNote!!.content)
+            color = currentNote!!.color
+            folder = currentNote!!.folder.takeIf { it != "Unknown" && it != "Inbox" } ?: ""
         }
     }
-
-    fun saveAndExit() {
-        // Sync content based on mode
-        val finalContent = if (isCodeMode) rawContent.text else richTextState.toMarkdown()
-        
-        if (title.isNotEmpty() || finalContent.isNotEmpty()) {
-             val parentPath = if (folder.isEmpty()) "Inbox" else folder
-             val fileName = currentNote?.file?.name?.takeIf { it.isNotEmpty() } ?: ""
-             
-             val fileObj = File(parentPath, fileName)
-
-             val note = Note(
+    
+    fun saveNote() {
+        if (title.isNotEmpty() || content.text.isNotEmpty()) {
+            val parentPath = if (folder.isEmpty()) "Inbox" else folder
+            val fileName = currentNote?.file?.name?.takeIf { it.isNotEmpty() } ?: ""
+            val fileObj = File(parentPath, fileName)
+            
+            val note = Note(
                 file = fileObj,
                 title = title.ifEmpty { "Untitled" },
-                content = finalContent,
+                content = content.text,
                 lastModified = Date(),
-                color = color
+                color = color,
+                isPinned = currentNote?.isPinned ?: false,
+                isArchived = currentNote?.isArchived ?: false,
+                isTrashed = currentNote?.isTrashed ?: false
             )
             
             val isChanged = if (currentNote == null) {
-                title.isNotEmpty() || finalContent.isNotEmpty()
+                title.isNotEmpty() || content.text.isNotEmpty()
             } else {
                 title != currentNote?.title || 
-                // Compare against the initial PARSED content if available, otherwise raw.
-                (initialParsedContent != null && finalContent != initialParsedContent) ||
-                (initialParsedContent == null && finalContent != currentNote?.content) ||
+                content.text != currentNote?.content ||
                 color != currentNote?.color ||
                 folder != (currentNote?.folder?.takeIf { it != "Unknown" && it != "Inbox" } ?: "")
             }
@@ -133,51 +131,67 @@ fun EditorScreen(
                 viewModel.saveNote(note, currentNote?.file)
             }
         }
-        onBack()
     }
-
+    
+    // Helper to insert text at cursor
+    fun insertAtCursor(prefix: String, suffix: String = "") {
+        val text = content.text
+        val start = content.selection.min
+        val end = content.selection.max
+        val selectedText = text.substring(start, end)
+        
+        val newText = text.substring(0, start) + prefix + selectedText + suffix + text.substring(end)
+        val newCursor = start + prefix.length + selectedText.length
+        
+        content = TextFieldValue(
+            text = newText,
+            selection = TextRange(newCursor)
+        )
+    }
+    
+    // Back Handler
     BackHandler {
-        saveAndExit() 
+        if (isEditing) {
+            saveNote()
+            isEditing = false
+        } else {
+            onBack()
+        }
     }
-
+    
     val isDark = androidx.compose.foundation.isSystemInDarkTheme()
     val noteColor = Color(color.toInt())
-    
-    // Improved Background Logic: Less contrast for Text Fields
-    // Use the note color as the base.
     val backgroundColor = if (isDark) {
         if (color == 0xFFFFFFFF.toLong()) MaterialTheme.colorScheme.background
         else noteColor.copy(alpha = 0.1f).compositeOver(MaterialTheme.colorScheme.background)
     } else {
         noteColor
     }
-
-    // Keyboard Detection
-    val density = LocalDensity.current
-    val isKeyboardOpen = WindowInsets.ime.getBottom(density) > 0
     
-    // Auto-open formatting when keyboard opens
-    LaunchedEffect(isKeyboardOpen) {
-        if (isKeyboardOpen) {
-            bottomBarState = BottomBarState.FORMATTING
-        }
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {},
                 navigationIcon = {
-                    IconButton(onClick = { saveAndExit() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    if (isEditing) {
+                        IconButton(onClick = { 
+                            saveNote()
+                            isEditing = false
+                        }) {
+                            Icon(Icons.Default.Check, contentDescription = "Done")
+                        }
+                    } else {
+                        IconButton(onClick = { onBack() }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        }
                     }
                 },
                 actions = {
-                    // Label Selector (Moved to Top)
-                     Box {
+                    // Label Selector
+                    Box {
                         IconButton(onClick = { showLabelMenu = true }) {
-                            // Using generic icon for Label/Folder
-                            Icon(androidx.compose.material.icons.Icons.Default.ArrowDropDown, contentDescription = "Label")
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Label", 
+                                 modifier = Modifier.size(20.dp))
                         }
                         DropdownMenu(
                             expanded = showLabelMenu,
@@ -185,38 +199,25 @@ fun EditorScreen(
                         ) {
                             DropdownMenuItem(
                                 text = { Text("Inbox (No Label)") },
-                                onClick = {
-                                    folder = ""
-                                    showLabelMenu = false
-                                }
+                                onClick = { folder = ""; showLabelMenu = false }
                             )
                             labels.forEach { label ->
                                 DropdownMenuItem(
                                     text = { Text(label) },
-                                    onClick = {
-                                        folder = label
-                                        showLabelMenu = false
-                                    }
+                                    onClick = { folder = label; showLabelMenu = false }
                                 )
                             }
                         }
                     }
-
-                    // Mode Toggle (Rich <-> Code)
-                    IconButton(onClick = { 
-                        if (isCodeMode) {
-                            richTextState.setMarkdown(rawContent.text)
-                        } else {
-                            rawContent = TextFieldValue(richTextState.toMarkdown())
+                    
+                    if (!isEditing) {
+                        // Edit button
+                        IconButton(onClick = { isEditing = true }) {
+                            Icon(Icons.Default.Edit, contentDescription = "Edit")
                         }
-                        isCodeMode = !isCodeMode 
-                    }) {
-                         Icon(
-                             if (isCodeMode) Icons.Default.Edit else Icons.Default.Menu, 
-                             contentDescription = if (isCodeMode) "Show Rich Text" else "Show Code"
-                         )
                     }
-
+                    
+                    // Delete/Restore
                     val currentNoteObj = currentNote
                     if (currentNoteObj != null) {
                         if (currentNoteObj.isTrashed) {
@@ -224,7 +225,7 @@ fun EditorScreen(
                                 viewModel.restoreNote(currentNoteObj)
                                 onBack() 
                             }) {
-                                Icon(androidx.compose.material.icons.Icons.Default.Refresh, "Restore")
+                                Icon(Icons.Default.Refresh, "Restore")
                             }
                         } else {
                             IconButton(onClick = { 
@@ -237,107 +238,137 @@ fun EditorScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = backgroundColor,
-                    scrolledContainerColor = backgroundColor
+                    containerColor = backgroundColor
                 )
             )
         },
         bottomBar = {
-            // Dynamic Bottom Bar
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(backgroundColor) // Match background
-                    .padding(8.dp)
-                    .imePadding()
-            ) {
-                 when (bottomBarState) {
-                     BottomBarState.DEFAULT -> {
-                         androidx.compose.foundation.layout.Row(
-                             modifier = Modifier.fillMaxWidth(),
-                             horizontalArrangement = Arrangement.Start, // Left aligned
-                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                         ) {
-                             // Palette Button
-                             IconButton(onClick = { bottomBarState = BottomBarState.COLORS }) {
-                                 Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray))
-                             }
-                             
-                             androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(8.dp))
-
-                             // Text Format Button (Underlined 'A')
-                             IconButton(onClick = { bottomBarState = BottomBarState.FORMATTING }) {
-                                 Text(
-                                     text = "A",
-                                     style = MaterialTheme.typography.titleLarge.copy(
-                                         textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
-                                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                                     )
-                                 )
-                             }
-                             
-                             // Push Date to the right
-                             androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
-                             
-                             // Date
-                             Text(
-                                 text = "Edited ${java.text.SimpleDateFormat("MMM dd", java.util.Locale.getDefault()).format(Date())}",
-                                 style = MaterialTheme.typography.labelSmall,
-                                 color = MaterialTheme.colorScheme.onSurfaceVariant
-                             )
-                         }
-                     }
-                     BottomBarState.COLORS -> {
-                         // Color Picker (Hides everything else)
-                         ColorPicker(
-                             selectedColor = color,
-                             onColorSelected = { 
-                                 color = it
-                                 bottomBarState = BottomBarState.DEFAULT // Close on selection
-                             }
-                         )
-                     }
-                     BottomBarState.FORMATTING -> {
-                         // Formatting Toolbar + Close Button
-                         androidx.compose.foundation.layout.Row(
-                             modifier = Modifier.fillMaxWidth(),
-                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                         ) {
-                             Box(modifier = Modifier.weight(1f)) {
-                                 FormattingToolbar(
-                                     isCodeMode = isCodeMode,
-                                     richState = richTextState,
-                                     onInsertRaw = { text, offset ->
-                                         val currentText = rawContent.text
-                                         val selection = rawContent.selection
-                                         val start = if (selection.collapsed) selection.start else selection.min
-                                         val end = if (selection.collapsed) selection.start else selection.max
-                                         
-                                         val prefix = text.substringBefore("><", text)
-                                         val suffix = if (text.contains("><")) text.substringAfter("><") else ""
-                                         
-                                         val newText = if (suffix.isNotEmpty()) {
-                                                 currentText.replaceRange(start, end, prefix + currentText.substring(start, end) + suffix)
-                                         } else {
-                                                 currentText.replaceRange(start, end, prefix)
-                                         }
-                                         
-                                         val newCursorPos = start + prefix.length + (if (suffix.isNotEmpty()) currentText.substring(start, end).length else 0)
-                                         
-                                         rawContent = TextFieldValue(
-                                             text = newText,
-                                             selection = TextRange(newCursorPos)
-                                         )
-                                     }
-                                 )
-                             }
-                             // Close Formatting
-                             IconButton(onClick = { bottomBarState = BottomBarState.DEFAULT }) {
-                                 Icon(androidx.compose.material.icons.Icons.Default.Close, "Close")
-                             }
-                         }
-                     }
-                 }
+            if (isEditing) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(backgroundColor)
+                        .imePadding()
+                ) {
+                    if (showColorPicker) {
+                        ColorPicker(
+                            selectedColor = color,
+                            onColorSelected = { 
+                                color = it
+                                showColorPicker = false
+                            }
+                        )
+                    } else {
+                        // Formatting Toolbar
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Color Picker Button
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(color.toInt()))
+                                        .border(1.dp, Color.Gray, CircleShape)
+                                        .clickable { showColorPicker = true }
+                                )
+                            }
+                            
+                            item { Spacer(Modifier.width(8.dp)) }
+                            
+                            // Heading (with long-press menu)
+                            item {
+                                Box {
+                                    ToolbarIconButton(
+                                        text = "H1",
+                                        bold = true,
+                                        onClick = { insertAtCursor("# ") },
+                                        onLongClick = { showHeadingMenu = true }
+                                    )
+                                    DropdownMenu(
+                                        expanded = showHeadingMenu,
+                                        onDismissRequest = { showHeadingMenu = false }
+                                    ) {
+                                        listOf("H1" to "# ", "H2" to "## ", "H3" to "### ", "H4" to "#### ").forEach { (label, md) ->
+                                            DropdownMenuItem(
+                                                text = { Text(label) },
+                                                onClick = { insertAtCursor(md); showHeadingMenu = false }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Separator
+                            item { ToolbarIconButton(text = "—", onClick = { insertAtCursor("---\n") }) }
+                            
+                            // Vertical Divider
+                            item { VerticalDivider(Modifier.height(24.dp)) }
+                            
+                            // Bold
+                            item { ToolbarIconButton(text = "B", bold = true, onClick = { insertAtCursor("**", "**") }) }
+                            
+                            // Italic
+                            item { ToolbarIconButton(text = "I", italic = true, onClick = { insertAtCursor("_", "_") }) }
+                            
+                            // Underline
+                            item { ToolbarIconButton(text = "U", underline = true, onClick = { insertAtCursor("<u>", "</u>") }) }
+                            
+                            // Strikethrough
+                            item { ToolbarIconButton(text = "S", strikethrough = true, onClick = { insertAtCursor("~~", "~~") }) }
+                            
+                            // Vertical Divider
+                            item { VerticalDivider(Modifier.height(24.dp)) }
+                            
+                            // URL
+                            item { ToolbarIconButton(text = "🔗", onClick = { insertAtCursor("[", "](url)") }) }
+                            
+                            // Inline Code
+                            item { ToolbarIconButton(text = "<>", onClick = { insertAtCursor("`", "`") }) }
+                            
+                            // Quote
+                            item { ToolbarIconButton(text = "\"", onClick = { insertAtCursor("> ") }) }
+                            
+                            // Math (with long-press menu)
+                            item {
+                                Box {
+                                    ToolbarIconButton(
+                                        text = "ƒ",
+                                        onClick = { insertAtCursor("$", "$") },
+                                        onLongClick = { showMathMenu = true }
+                                    )
+                                    DropdownMenu(
+                                        expanded = showMathMenu,
+                                        onDismissRequest = { showMathMenu = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Inline $...$") },
+                                            onClick = { insertAtCursor("$", "$"); showMathMenu = false }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Block $$...$$") },
+                                            onClick = { insertAtCursor("$$\n", "\n$$"); showMathMenu = false }
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            // Bullet List
+                            item { ToolbarIconButton(text = "•", onClick = { insertAtCursor("- ") }) }
+                            
+                            // Numbered List
+                            item { ToolbarIconButton(text = "1.", onClick = { insertAtCursor("1. ") }) }
+                            
+                            // Checkbox
+                            item { ToolbarIconButton(text = "☐", onClick = { insertAtCursor("- [ ] ") }) }
+                        }
+                    }
+                }
             }
         },
         containerColor = backgroundColor
@@ -348,137 +379,108 @@ fun EditorScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            TextField(
-                value = title,
-                onValueChange = { title = it },
-                placeholder = { Text("Title") },
-                textStyle = MaterialTheme.typography.headlineMedium,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-            
-            if (isCodeMode) {
-                // Raw Markdown Editor
+            if (isEditing) {
+                // EDIT MODE: Plain text
                 TextField(
-                    value = rawContent,
-                    onValueChange = { rawContent = it },
-                    placeholder = { Text("Note (Markdown)") },
-                    textStyle = MaterialTheme.typography.bodyLarge,
+                    value = title,
+                    onValueChange = { title = it },
+                    placeholder = { Text("Title") },
+                    textStyle = MaterialTheme.typography.headlineMedium,
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,
                         focusedIndicatorColor = Color.Transparent,
                         unfocusedIndicatorColor = Color.Transparent
                     ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                BasicTextField(
+                    value = content,
+                    onValueChange = { content = it },
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        color = MaterialTheme.colorScheme.onBackground
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
+                        .weight(1f),
+                    decorationBox = { innerTextField ->
+                        Box {
+                            if (content.text.isEmpty()) {
+                                Text(
+                                    "Start typing...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            innerTextField()
+                        }
+                    }
                 )
             } else {
-                // WYSIWYG Editor
-                RichTextEditor(
-                    state = richTextState,
-                    placeholder = { Text("Note") },
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onBackground),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
+                // VIEW MODE: Rendered markdown
+                PreviewWebView(
+                    content = "# ${title}\n\n${content.text}",
+                    isDark = isDark,
+                    onCheckboxToggled = { index, checked ->
+                        val newText = toggleTask(content.text, index, checked)
+                        content = TextFieldValue(newText)
+                        
+                        // Auto-save on checkbox toggle
+                        val parentPath = if (folder.isEmpty()) "Inbox" else folder
+                        val fileName = currentNote?.file?.name ?: ""
+                        val fileObj = File(parentPath, fileName)
+                        val note = Note(
+                            file = fileObj,
+                            title = title.ifEmpty { "Untitled" },
+                            content = newText,
+                            lastModified = Date(),
+                            color = color
+                        )
+                        viewModel.saveNote(note, currentNote?.file)
+                    }
                 )
             }
         }
     }
 }
 
-enum class BottomBarState {
-    DEFAULT,
-    COLORS,
-    FORMATTING
-}
-
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun FormattingToolbar(
-    isCodeMode: Boolean,
-    richState: RichTextState,
-    onInsertRaw: (String, Int) -> Unit
+fun ToolbarIconButton(
+    text: String,
+    bold: Boolean = false,
+    italic: Boolean = false,
+    underline: Boolean = false,
+    strikethrough: Boolean = false,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null
 ) {
-    LazyRow(
-        modifier = Modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        if (isCodeMode) {
-             // Raw Markdown Actions
-            item { ToolbarButton("B", true, false) { onInsertRaw("**><**", 2) } }
-            item { ToolbarButton("I", false, false) { onInsertRaw("_><_", 1) } }
-            item { ToolbarButton("H1", true, false) { onInsertRaw("# ", 2) } }
-            item { ToolbarButton("-", true, false) { onInsertRaw("- ", 2) } }
-            item { ToolbarButton("[ ]", false, false) { onInsertRaw("- [ ] ", 6) } }
-        } else {
-            // Rich Text Actions
-            val spanStyle = richState.currentSpanStyle
-            val isBold = spanStyle.fontWeight == androidx.compose.ui.text.font.FontWeight.Bold
-            val isItalic = spanStyle.fontStyle == androidx.compose.ui.text.font.FontStyle.Italic
-            val isUnderline = spanStyle.textDecoration?.contains(androidx.compose.ui.text.style.TextDecoration.Underline) == true
-            
-            item { 
-                ToolbarButton("B", true, isBold) { 
-                    richState.toggleSpanStyle(androidx.compose.ui.text.SpanStyle(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)) 
-                } 
-            }
-            item { ToolbarButton("I", false, isItalic) { 
-                richState.toggleSpanStyle(androidx.compose.ui.text.SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) 
-            } }
-            item { ToolbarButton("U", false, isUnderline) { 
-                richState.toggleSpanStyle(androidx.compose.ui.text.SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) 
-            } }
-            
-            item { ToolbarButton("-", true, false) { richState.toggleUnorderedList() } }
-            item { ToolbarButton("1.", false, false) { richState.toggleOrderedList() } }
-            
-            // Indent Button (Tab)
-            item {
-                ToolbarButton("→|", true, false) {
-                    try {
-                        val markdown = richState.toMarkdown()
-                        val cursor = richState.selection.max
-                        
-                        if (cursor >= 0 && cursor <= markdown.length) {
-                             // Insert 4 non-breaking spaces for manual indentation
-                             val indent = "\u00A0\u00A0\u00A0\u00A0" 
-                             val newMarkdown = markdown.substring(0, cursor) + indent + markdown.substring(cursor)
-                             richState.setMarkdown(newMarkdown)
-                             richState.selection = TextRange(cursor + 4)
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-@Composable
-fun ToolbarButton(text: String, bold: Boolean, isActive: Boolean, onClick: () -> Unit) {
-    val backgroundColor = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
-    val contentColor = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-    
     Box(
         modifier = Modifier
-            .clip(CircleShape) // Changed to CircleShape
-            .background(backgroundColor)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
     ) {
         Text(
-            text, 
-            fontWeight = if (bold) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal,
-            color = contentColor
+            text = text,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
+                fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
+                textDecoration = when {
+                    underline && strikethrough -> TextDecoration.combine(listOf(TextDecoration.Underline, TextDecoration.LineThrough))
+                    underline -> TextDecoration.Underline
+                    strikethrough -> TextDecoration.LineThrough
+                    else -> null
+                }
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -488,43 +490,97 @@ fun ColorPicker(
     selectedColor: Long,
     onColorSelected: (Long) -> Unit
 ) {
-    val defaultColor = 0xFFFFFFFF
-    val allColors = listOf(
+    val colors = listOf(
         0xFFFFFFFF, 0xFFF28B82, 0xFFFBBC04, 0xFFFFF475, 
         0xFFCCFF90, 0xFFA7FFEB, 0xFFCBF0F8, 0xFFAECBFA, 
         0xFFD7AEFB, 0xFFFDCFE8, 0xFFE6C9A8, 0xFFE8EAED
     )
     
-    // Sort ordering: [Selected, Default, ...Rest] (Deduplicated)
-    val orderedColors = remember(selectedColor) {
-        val list = mutableListOf<Long>()
-        if (selectedColor != defaultColor) {
-            list.add(selectedColor)
-            list.add(defaultColor)
-        } else {
-            list.add(defaultColor)
-        }
-        list.addAll(allColors.filter { it != selectedColor && it != defaultColor })
-        list
-    }
-    
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.padding(vertical = 8.dp)
+        modifier = Modifier.padding(8.dp)
     ) {
-        items(orderedColors) { color ->
+        items(colors) { c ->
             Box(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
-                    .background(Color(color.toInt()))
+                    .background(Color(c.toInt()))
                     .border(
-                        width = if (color == selectedColor) 2.dp else 1.dp,
-                        color = if (color == selectedColor) Color.Blue else Color.Gray,
+                        width = if (c == selectedColor) 2.dp else 1.dp,
+                        color = if (c == selectedColor) MaterialTheme.colorScheme.primary else Color.Gray,
                         shape = CircleShape
                     )
-                    .clickable { onColorSelected(color) }
+                    .clickable { onColorSelected(c) }
             )
         }
     }
+}
+
+// Helper to toggle checkbox in markdown text
+fun toggleTask(markdown: String, index: Int, checked: Boolean): String {
+    val regex = Regex("- \\[[ xX]\\]")
+    var matchIndex = 0
+    
+    return regex.replace(markdown) { matchResult ->
+        if (matchIndex++ == index) {
+            if (checked) "- [x]" else "- [ ]"
+        } else {
+            matchResult.value
+        }
+    }
+}
+
+// Extension to escape string for JavaScript double-quoted strings
+fun String.escapeForJs(): String {
+    return this
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\n", "\\n")
+        .replace("\r", "")
+}
+
+@Composable
+fun PreviewWebView(
+    content: String,
+    isDark: Boolean,
+    onCheckboxToggled: (Int, Boolean) -> Unit
+) {
+    val escapedContent = content.escapeForJs()
+    
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { context ->
+            android.webkit.WebView(context).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.allowFileAccess = true
+                @Suppress("DEPRECATION")
+                settings.allowFileAccessFromFileURLs = true
+                @Suppress("DEPRECATION")
+                settings.allowUniversalAccessFromFileURLs = true
+                
+                addJavascriptInterface(object {
+                    @android.webkit.JavascriptInterface
+                    fun onCheckboxToggled(index: Int, checked: Boolean) {
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            onCheckboxToggled(index, checked)
+                        }
+                    }
+                }, "Android")
+                
+                webViewClient = object : android.webkit.WebViewClient() {
+                    override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
+                        val jsCode = "updateContent(\"" + escapedContent + "\", " + isDark + ")"
+                        evaluateJavascript(jsCode, null)
+                    }
+                }
+                
+                loadUrl("file:///android_asset/preview/preview.html")
+            }
+        },
+        update = { view ->
+            val jsCode = "updateContent(\"" + escapedContent + "\", " + isDark + ")"
+            view.evaluateJavascript(jsCode, null)
+        }
+    )
 }

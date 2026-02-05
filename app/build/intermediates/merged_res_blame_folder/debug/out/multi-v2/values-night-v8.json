@@ -1,10 +1,10 @@
 {
     "logs": [
         {
-            "outputFile": "com.waph1.markit.app-mergeDebugResources-52:/values-night-v8/values-night-v8.xml",
+            "outputFile": "com.waph1.markit.app-mergeDebugResources-56:/values-night-v8/values-night-v8.xml",
             "map": [
                 {
-                    "source": "C:\\Users\\Shadow\\.gradle\\caches\\8.13\\transforms\\989b247abd665b925e41c6668a80f1a4\\transformed\\appcompat-1.6.1\\res\\values-night-v8\\values-night-v8.xml",
+                    "source": "C:\\Users\\Shadow\\.gradle\\caches\\8.13\\transforms\\25a64010e9b00c34794058f6024ee0ca\\transformed\\appcompat-1.6.1\\res\\values-night-v8\\values-night-v8.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9",
                         "startColumns": "4,4,4,4,4,4,4,4",

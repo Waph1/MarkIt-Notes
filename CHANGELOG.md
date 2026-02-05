@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-02-05
+### Added
+- **Search & Filter**: Logic to search notes by title and content with a 300ms debounce for performance.
+- **Sorting**: Sort notes by Title, Date Modified, or Date Created (Ascending/Descending).
+- **New UI Components**:
+    - dedicated `SearchBar` with clear button and sort menu.
+    - Adaptive App Icon (Dark Mode compatible, no white border).
+### Changed
+- **Refactoring**:
+    - Globalized all strings to `strings.xml`.
+    - Cleaned up `DashboardScreen` by extracting components.
+- **Documentation**: Updated README with accurate features and icon.
+
 ## [0.2.2] - 2026-02-04
 ### Changed
 - **UI**: Updated App Icon to "Adaptive Icon" format.

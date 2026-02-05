@@ -22,6 +22,10 @@ class FileNoteRepository(
     // Cache
     private val _notes = MutableStateFlow<List<Note>>(emptyList())
     
+    // Loading state
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: Flow<Boolean> = _isLoading
+    
     // In-memory cache of metadata (color, pinned)
     private var appConfig = AppConfig()
 
@@ -44,6 +48,7 @@ class FileNoteRepository(
     override fun getAllNotes(): Flow<List<Note>> = _notes
 
     suspend fun refreshNotes() = withContext(Dispatchers.IO) {
+        _isLoading.value = true
         val notesList = mutableListOf<Note>()
         rootDir?.let { root ->
             // Ensure Inbox
@@ -130,13 +135,14 @@ class FileNoteRepository(
         }
         _notes.value = notesList
         saveCacheToDisk(notesList)
+        _isLoading.value = false
     }
 
     override suspend fun getNote(id: String): Note? {
         return _notes.value.find { it.file.name == id }
     }
 
-    override suspend fun saveNote(note: Note, oldFile: java.io.File?) = withContext(Dispatchers.IO) {
+    override suspend fun saveNote(note: Note, oldFile: java.io.File?): String = withContext(Dispatchers.IO) {
         // Optimistic Update Data Setup
         val currentNotes = _notes.value.toMutableList()
         val existingNote = _notes.value.find { it.file.name == note.file.name || it.file.name == note.title + ".md" }
@@ -162,9 +168,9 @@ class FileNoteRepository(
                      appConfig.fileColors[newFileName] = note.color
                      metadataManager.saveConfig(root, appConfig)
                  }
-                 saveCacheToDisk(_notes.value)
+                  saveCacheToDisk(_notes.value)
              }
-             return@withContext
+             return@withContext "${note.title}.md"
         }
                              
         // Prepare new list state (Content Change)
@@ -195,6 +201,14 @@ class FileNoteRepository(
             // appConfig.fileColors[note.file.name] = note.color // Note: file.name might change if renamed?
             appConfig.fileColors[note.title + ".md"] = note.color // Use filename as key
             
+            // Persist Pinned Status
+            val fileNameKey = note.title + ".md"
+            if (note.isPinned) {
+                appConfig.pinnedFiles.add(fileNameKey)
+            } else {
+                appConfig.pinnedFiles.remove(fileNameKey)
+            }
+            
             // If Content Changed, REMOVE custom timestamp (let it update naturally to 'now')
             // If Content Changed, REMOVE custom timestamp (let it update naturally to 'now')
             appConfig.customTimestamps.remove(note.title + ".md")
@@ -204,8 +218,31 @@ class FileNoteRepository(
             var targetFolderName = note.file.parent // "Inbox", "Work"
             if (targetFolderName.isNullOrEmpty()) targetFolderName = "Inbox"
             
-            var targetFolderDoc = root.findFile(targetFolderName)
-            if (targetFolderDoc == null) targetFolderDoc = root.createDirectory(targetFolderName)
+            // Pinned Notes Logic: Enforce "Inbox/Pinned" for pinned notes
+            // If pinned, folder is effectively "Inbox/Pinned" (or "Pinned" inside Inbox)
+            // But internal folder struct is Root/Label.
+            // If we want "Inbox/Pinned", we need a "Pinned" folder inside "Inbox".
+            // DocumentFile structure is tree-based.
+            
+            var targetFolderDoc: DocumentFile? = null
+            
+            if (note.isPinned) {
+                 // Ensure Inbox exists
+                 val inbox = root.findFile("Inbox") ?: root.createDirectory("Inbox")
+                 // Ensure Pinned exists inside Inbox
+                 val pinnedDir = inbox?.findFile("Pinned") ?: inbox?.createDirectory("Pinned")
+                 targetFolderDoc = pinnedDir
+            } else {
+                 // Normal Logic
+                 // If the note WAS in Inbox/Pinned, we need to move it back to Inbox (or original folder).
+                 // note.file.parent might still say "Pinned" if we just unpinned it in memory?
+                 // No, viewModel updates the list.
+                 // We will trust 'targetFolderName'. Only override if Pinned.
+                 // If unpinned, we put it in 'targetFolderName' (e.g. Inbox).
+                 
+                 targetFolderDoc = root.findFile(targetFolderName)
+                 if (targetFolderDoc == null) targetFolderDoc = root.createDirectory(targetFolderName)
+            }
             
             val fileName = "${note.title}.md"
             
@@ -252,7 +289,7 @@ class FileNoteRepository(
             }
             refreshNotes()
         }
-        Unit
+        return@withContext "${note.title}.md"
     }
 
     override suspend fun deleteNote(id: String) = withContext(Dispatchers.IO) {
@@ -434,13 +471,12 @@ class FileNoteRepository(
              }
         }
         refreshNotes()
-        refreshNotes()
     }
     
     override suspend fun setNoteColor(id: String, color: Long) = withContext(Dispatchers.IO) {
         // Optimistic Update
         val currentNotes = _notes.value.toMutableList()
-        val index = currentNotes.indexOfFirst { it.file.name == id }
+        val index = currentNotes.indexOfFirst { it.file.path == id || it.file.name == id }
         if (index != -1) {
              val note = currentNotes[index]
              // Only update color, preserve everything else including timestamp
@@ -450,7 +486,8 @@ class FileNoteRepository(
              
              // Persist Metadata
              rootDir?.let { root ->
-                 appConfig.fileColors[id] = color // id is usually filename e.g. "Title.md"
+                 val fileName = note.file.name // Use filename for config key
+                 appConfig.fileColors[fileName] = color
                  metadataManager.saveConfig(root, appConfig)
              }
         }
@@ -469,14 +506,75 @@ class FileNoteRepository(
         _notes.value = currentNotes
         saveCacheToDisk(_notes.value)
         
-        // Persist Metadata
+        // Persist Metadata & Move Files
         rootDir?.let { root ->
+            // Ensure Folders exist
+            val inbox = root.findFile("Inbox") ?: root.createDirectory("Inbox")
+            val pinnedDir = inbox?.findFile("Pinned") ?: inbox?.createDirectory("Pinned")
+            
             noteIds.forEach { id ->
-                val fileName = if (id.contains("/")) id.substringAfterLast("/") else id
-                if (isPinned) {
-                    appConfig.pinnedFiles.add(fileName)
-                } else {
-                    appConfig.pinnedFiles.remove(fileName)
+                val note = _notes.value.find { it.file.path == id || it.file.name == id } ?: return@forEach
+                val fileName = note.file.name
+                
+                // Update Metadata using FILENAME
+                if (isPinned) appConfig.pinnedFiles.add(fileName) else appConfig.pinnedFiles.remove(fileName)
+                
+                // Find Source File (could be anywhere)
+                val sourceFolderStr = note.file.parent ?: "Inbox"
+                
+                // ... (rest of move logic can remain similar, but ensure we use 'fileName' and 'note' correctly)
+                // Simplify finding source using the note object's current knowledge
+                
+                var sourceFileDoc: DocumentFile? = null
+                
+                // Try to find file based on known parent
+                // Note: note.file.parent "Pinned" usually means Inbox/Pinned in file structure logic?
+                // Or if we are in File repo, 'folder' might be just the name. 
+                // Let's rely on recursive search if simple lookup fails? No, too slow.
+                // Check if currently physically in pinned folder
+                sourceFileDoc = pinnedDir?.findFile(fileName)
+                
+                if (sourceFileDoc == null) {
+                    // Check active folder
+                     sourceFileDoc = root.findFile(sourceFolderStr)?.findFile(fileName)
+                }
+                
+                // Check Archive
+                if (sourceFileDoc == null) {
+                    sourceFileDoc = root.findFile(".Archive")?.findFile(sourceFolderStr)?.findFile(fileName)
+                }
+
+                if (sourceFileDoc != null) {
+                    if (isPinned) {
+                        // Move TO Inbox/Pinned
+                        if (pinnedDir != null && sourceFileDoc.parentFile?.name != "Pinned") {
+                             try {
+                                val content = readText(sourceFileDoc)
+                                val newFile = pinnedDir.createFile("text/markdown", fileName)
+                                newFile?.let { nf ->
+                                     context.contentResolver.openOutputStream(nf.uri)?.use { os ->
+                                         OutputStreamWriter(os).use { it.write(content) }
+                                     }
+                                     sourceFileDoc.delete()
+                                }
+                            } catch (e: Exception) { e.printStackTrace() }
+                        }
+                    } else {
+                        // Move FROM Pinned TO Inbox (default unpin location)
+                        // Only move if it IS in Pinned folder
+                        if (sourceFileDoc.parentFile?.name == "Pinned" && inbox != null) {
+                            try {
+                                val content = readText(sourceFileDoc)
+                                val newFile = inbox.createFile("text/markdown", fileName)
+                                newFile?.let { nf ->
+                                     context.contentResolver.openOutputStream(nf.uri)?.use { os ->
+                                         OutputStreamWriter(os).use { it.write(content) }
+                                     }
+                                     sourceFileDoc.delete()
+                                }
+                            } catch (e: Exception) { e.printStackTrace() }
+                        }
+                    }
                 }
             }
             metadataManager.saveConfig(root, appConfig)

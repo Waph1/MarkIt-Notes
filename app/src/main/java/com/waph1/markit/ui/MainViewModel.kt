@@ -4,7 +4,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.waph1.markit.data.model.Note
-import com.waph1.markit.data.repository.FileNoteRepository
+import com.waph1.markit.data.repository.RoomNoteRepository
 import com.waph1.markit.data.repository.MetadataManager
 import com.waph1.markit.data.repository.PrefsManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,13 +14,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 
 class MainViewModel(
-    private val repository: FileNoteRepository,
+    private val repository: RoomNoteRepository,
     private val metadataManager: MetadataManager,
     private val prefsManager: PrefsManager
 ) : ViewModel() {
@@ -44,28 +45,29 @@ class MainViewModel(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    // Notes Flow: Reacts to filter changes and queries appropriate DAO method
+    @OptIn(kotlinx.coroutines.FlowPreview::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val notes: StateFlow<List<Note>> = combine(
-        repository.getAllNotes(),
-        _currentFilter,
+        _currentFilter.flatMapLatest { filter ->
+            when (filter) {
+                is NoteFilter.All -> repository.getAllNotes()
+                is NoteFilter.Label -> repository.getNotesByFolder(filter.name)
+                is NoteFilter.Archive -> repository.getArchivedNotes()
+                is NoteFilter.Trash -> repository.getTrashedNotes()
+            }
+        },
         _sortOrder,
         _sortDirection,
         _searchQuery
             .debounce(300L)
             .distinctUntilChanged()
-    ) { allNotes, filter, order, direction, query ->
-        val filtered = when (filter) {
-            is NoteFilter.All -> allNotes.filter { !it.isArchived && !it.isTrashed }
-            is NoteFilter.Label -> allNotes.filter { it.folder == filter.name && !it.isTrashed }
-            is NoteFilter.Archive -> allNotes.filter { it.isArchived && !it.isTrashed }
-            is NoteFilter.Trash -> allNotes.filter { it.isTrashed }
-        }
-
+    ) { notesList, order, direction, query ->
         // Search Filter
         val searched = if (query.isBlank()) {
-            filtered
+            notesList
         } else {
             val q = query.lowercase()
-            filtered.filter { 
+            notesList.filter { 
                 it.title.lowercase().contains(q) || it.content.lowercase().contains(q)
             }
         }
@@ -82,28 +84,13 @@ class MainViewModel(
             sorted
         }
         
-        // Pinned notes always on top (only if not searching, or keep pinned on top during search? usually search breaks structure, but let's keep it for now)
+        // Pinned notes always on top
         directed.sortedByDescending { it.isPinned }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Derive labels from notes (excluding system folders)
-    // User wants to see labels. If they created a folder "Personal", it should show up.
-    // Logic: it != "Unknown" && it != "Inbox" && !it.startsWith(".")
-    // If they only have Inbox, this is empty.
-    // If they have "Personal", it should show.
-    // Maybe `getAllNotes` isn't returning the correct path?
-    // In FileNoteRepository refresher: Note(file = java.io.File(folder.name, ...)) where folder is from `root.listFiles()`.
-    // java.io.File("Personal", "foo.md").parent is "Personal".
-    // So logic seems sound IF folders exist.
-    // Perhaps `repository.getAllNotes()` is empty initially?
-    // Yes, _notes is emptyList() initially.
-    // And refreshNotes is forced in `setRootFolder`.
-    
-    val labels: StateFlow<List<String>> = repository.getAllNotes().map { noteList ->
-        noteList.map { it.folder }
-            .filter { it != "Unknown" && !it.startsWith(".") }
-            .distinct().sorted()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // Labels from Room DAO
+    val labels: StateFlow<List<String>> = repository.getLabels()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     
     // UI State
     // Default to TRUE, but check immediately on init
@@ -123,6 +110,10 @@ class MainViewModel(
 
     private val _isEditorOpen = MutableStateFlow(false)
     val isEditorOpen: StateFlow<Boolean> = _isEditorOpen.asStateFlow()
+
+    // isLoading: Room reads are synchronous from cache, so always false after initial sync
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     fun setRootFolder(uri: Uri) {
         viewModelScope.launch {
@@ -174,7 +165,16 @@ class MainViewModel(
 
     fun saveNote(note: Note, oldFile: java.io.File? = null) {
         viewModelScope.launch {
-            repository.saveNote(note, oldFile)
+            val savedPath = repository.saveNote(note, oldFile)
+            if (savedPath.isNotEmpty()) {
+                // Return updated note so UI stays in sync (e.g. no dupes on next save)
+                // We need to reconstruct the note with the new path/file
+                // But since we just saved it, we can just update the file object in current note if it matches?
+                // Or easier: just query it or update the local object.
+                // Let's update the local object to avoid a read.
+                val updatedFile = java.io.File(savedPath)
+                _currentNote.value = note.copy(file = updatedFile)
+            }
         }
     }
 
@@ -264,7 +264,7 @@ class MainViewModel(
         
         viewModelScope.launch {
             notesToUpdate.forEach { note ->
-                repository.setNoteColor(note.file.name, color)
+                repository.setNoteColor(note.file.path, color) // Pass ID (path)
             }
         }
     }

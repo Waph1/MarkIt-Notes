@@ -39,13 +39,14 @@ class MetadataManager(private val context: Context) {
         
         file?.let {
             try {
-                context.contentResolver.openOutputStream(it.uri)?.use { outputStream ->
+                // Use "wt" mode to truncate file before writing
+                context.contentResolver.openOutputStream(it.uri, "wt")?.use { outputStream ->
                     val writer = OutputStreamWriter(outputStream)
                     gson.toJson(config, writer)
                     writer.flush()
                 }
             } catch (e: Exception) {
-                // Log error
+                e.printStackTrace() // Log error for debugging
             }
         }
     }

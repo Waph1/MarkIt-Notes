@@ -36,8 +36,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -70,6 +72,17 @@ import dev.jeziellago.compose.markdowntext.MarkdownText
 import com.waph1.markit.data.model.Note
 import com.waph1.markit.data.repository.PrefsManager
 import kotlinx.coroutines.launch
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import androidx.activity.ComponentActivity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,6 +97,7 @@ fun DashboardScreen(
     val labels by viewModel.labels.collectAsState()
     val isPermissionNeeded by viewModel.isPermissionNeeded.collectAsState()
     val currentFilter by viewModel.currentFilter.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
     
     // Selection State
     val selectedNotes by viewModel.selectedNotes.collectAsState()
@@ -91,6 +105,30 @@ fun DashboardScreen(
     
     val drawerState = androidx.compose.material3.rememberDrawerState(androidx.compose.material3.DrawerValue.Closed)
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val context = LocalContext.current
+    
+    // Double back to exit state
+    var lastBackPressTime by remember { mutableStateOf(0L) }
+    
+    BackHandler {
+        when {
+            drawerState.isOpen -> {
+                scope.launch { drawerState.close() }
+            }
+            isInSelectionMode -> {
+                viewModel.clearSelection()
+            }
+            else -> {
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - lastBackPressTime < 2000) {
+                    (context as? ComponentActivity)?.finish()
+                } else {
+                    lastBackPressTime = currentTime
+                    Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
     
     var showSortMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
@@ -104,7 +142,7 @@ fun DashboardScreen(
                         modifier = Modifier.padding(16.dp),
                         style = MaterialTheme.typography.headlineMedium
                     )
-                    androidx.compose.material3.Divider()
+                    androidx.compose.material3.HorizontalDivider()
                     
                     // Notes (All)
                     androidx.compose.material3.NavigationDrawerItem(
@@ -138,7 +176,7 @@ fun DashboardScreen(
                         }
                     }
                     
-                    androidx.compose.material3.Divider(modifier = Modifier.padding(vertical = 8.dp))
+                    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     
                     // Archive
                     androidx.compose.material3.NavigationDrawerItem(
@@ -174,7 +212,11 @@ fun DashboardScreen(
 
         Scaffold(
             topBar = {
-                if (isInSelectionMode) {
+                AnimatedVisibility(
+                    visible = isInSelectionMode,
+                    enter = fadeIn() + slideInVertically { -it },
+                    exit = fadeOut() + slideOutVertically { -it }
+                ) {
                     SelectionTopAppBar(
                         selectionCount = selectedNotes.size,
                         currentFilter = currentFilter,
@@ -187,7 +229,12 @@ fun DashboardScreen(
                         onPin = { viewModel.togglePinSelectedNotes() },
                         availableLabels = labels
                     )
-                } else {
+                }
+                AnimatedVisibility(
+                    visible = !isInSelectionMode,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
                     androidx.compose.material3.TopAppBar(
                         title = {
                             androidx.compose.material3.Surface(
@@ -198,8 +245,6 @@ fun DashboardScreen(
                                 color = MaterialTheme.colorScheme.surfaceVariant,
                                 tonalElevation = 2.dp
                             ) {
-
-
                                 SearchBar(viewModel = viewModel)
                             }
                         },
@@ -225,12 +270,23 @@ fun DashboardScreen(
                 }
             }
         ) { paddingValues ->
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(horizontal = 8.dp) // Add horizontal padding for grid
             ) {
+                if (isLoading && notes.isNotEmpty()) {
+                    androidx.compose.material3.LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth().height(2.dp),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 8.dp) // Add horizontal padding for grid
+                ) {
                 if (isPermissionNeeded) {
                     PermissionRequestState(
                         onSelectFolder = onSelectFolder,
@@ -241,6 +297,7 @@ fun DashboardScreen(
                         notes = notes,
                         selectedNotes = selectedNotes,
                         isInSelectionMode = isInSelectionMode,
+                        isLoading = isLoading,
                         currentFilter = currentFilter,
                         listState = listState,
                         onNoteClick = { note ->
@@ -259,6 +316,8 @@ fun DashboardScreen(
         }
     }
 }
+}
+
 
 @Composable
 fun PermissionRequestState(
@@ -291,14 +350,45 @@ fun NoteGrid(
     notes: List<Note>,
     selectedNotes: Set<String>,
     isInSelectionMode: Boolean,
+    isLoading: Boolean,
     currentFilter: MainViewModel.NoteFilter,
     listState: LazyStaggeredGridState,
     onNoteClick: (Note) -> Unit,
     onNoteLongClick: (Note) -> Unit
 ) {
-    if (notes.isEmpty()) {
+    if (isLoading && notes.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No notes found.")
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                androidx.compose.material3.CircularProgressIndicator()
+                Text(
+                    "Loading notes...",
+                    modifier = Modifier.padding(top = 16.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    } else if (notes.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+                Text(
+                    "No notes yet",
+                    modifier = Modifier.padding(top = 16.dp),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "Tap + to create your first note",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
         }
     } else {
         // If sorting by Label, split into Active and Archived
@@ -387,7 +477,7 @@ fun NoteGrid(
                     item(span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
                          Column(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
                              Text("Archived notes", style = MaterialTheme.typography.labelLarge)
-                             androidx.compose.material3.Divider(modifier = Modifier.padding(top = 8.dp))
+                             androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
                          }
                     }
                     items(archived) { note ->
@@ -412,6 +502,7 @@ fun NoteCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     val isDark = androidx.compose.foundation.isSystemInDarkTheme()
     val noteColor = Color(note.color.toInt())
     
@@ -424,12 +515,20 @@ fun NoteCard(
         noteColor
     }
 
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val onLongClickAction = {
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        onLongClick()
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = androidx.compose.foundation.LocalIndication.current,
                 onClick = onClick,
-                onLongClick = onLongClick
+                onLongClick = onLongClickAction
             )
             .then(if (isSelected) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)) else Modifier),
         shape = RoundedCornerShape(12.dp),
@@ -471,17 +570,17 @@ fun NoteCard(
                         modifier = Modifier
                             .matchParentSize()
                             .combinedClickable(
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                indication = null,
+                                interactionSource = interactionSource,
+                                indication = null, // Ripple is handled by the shared interaction source on the Card
                                 onClick = onClick,
-                                onLongClick = onLongClick
+                                onLongClick = onLongClickAction
                             )
                     )
                 }
             }
         }
     }
-    }
+}
 
 
 @OptIn(ExperimentalMaterial3Api::class)

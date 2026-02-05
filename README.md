@@ -1,8 +1,8 @@
-# MarkIt (v0.2.0)
+# MarkIt (v0.3.0)
 
 **MarkIt** is a modern, beautiful, and privacy-focused Markdown note-taking app for Android. Designed with a clean Google Keep-inspired aesthetic, it puts your content first while giving you the power of Markdown formatting.
 
-![MarkIt Icon](app/src/main/res/drawable/ic_launcher.png)
+![MarkIt Icon](app/src/main/res/drawable/ic_launcher_foreground.png)
 
 ## About
 MarkIt differs from other note apps by treating your notes as **real files**. There is no hidden database; every note is a plain text Markdown (`.md`) file stored in a folder of your choice on your device. This means you truly own your data—you can sync it, back it up, or open it with any other text editor.

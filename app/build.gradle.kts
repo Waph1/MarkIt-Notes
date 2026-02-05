@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -11,8 +12,8 @@ android {
         applicationId = "com.waph1.markit"
         minSdk = 24
         targetSdk = 34
-        versionCode = 5
-        versionName = "0.2.2"
+        versionCode = 6
+        versionName = "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -66,4 +67,10 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("com.github.jeziellago:compose-markdown:0.5.0")
     implementation("com.mohamedrejeb.richeditor:richeditor-compose:1.0.0-rc03")
+    
+    // Room Database
+    val roomVersion = "2.6.1"
+    implementation("androidx.room:room-runtime:$roomVersion")
+    implementation("androidx.room:room-ktx:$roomVersion")
+    ksp("androidx.room:room-compiler:$roomVersion")
 }

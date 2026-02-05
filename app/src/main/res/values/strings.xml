@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">MarkIt</string>
+    <string name="app_name">MarkIt Notes</string>
     <string name="search_hint">Search in MarkIt</string>
     <string name="clear_search">Clear Search</string>
     <string name="sort_notes">Sort Notes</string>

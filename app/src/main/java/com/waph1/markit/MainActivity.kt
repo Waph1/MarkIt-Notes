@@ -6,6 +6,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -15,7 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.waph1.markit.data.repository.FileNoteRepository
+import com.waph1.markit.data.repository.RoomNoteRepository
 import com.waph1.markit.data.repository.MetadataManager
 import com.waph1.markit.data.repository.PrefsManager
 import com.waph1.markit.ui.DashboardScreen
@@ -25,7 +30,7 @@ import com.waph1.markit.ui.theme.KeepNotesTheme
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var repository: FileNoteRepository
+    private lateinit var repository: RoomNoteRepository
     private lateinit var metadataManager: MetadataManager
     private lateinit var prefsManager: PrefsManager
 
@@ -50,7 +55,7 @@ class MainActivity : ComponentActivity() {
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         
         metadataManager = MetadataManager(applicationContext)
-        repository = FileNoteRepository(applicationContext, metadataManager)
+        repository = RoomNoteRepository(applicationContext, metadataManager)
         prefsManager = PrefsManager(applicationContext)
         
         // Auto-load if persisted
@@ -78,19 +83,35 @@ class MainActivity : ComponentActivity() {
                     val isEditorOpen by viewModel.isEditorOpen.collectAsState()
                     val listState = rememberLazyStaggeredGridState()
                     
-                    if (isEditorOpen) {
-                        EditorScreen(
-                            viewModel = viewModel,
-                            onBack = { viewModel.closeEditor() }
-                        )
-                    } else {
-                        DashboardScreen(
-                            viewModel = viewModel,
-                            listState = listState,
-                            onSelectFolder = { openDocumentTreeLauncher.launch(null) },
-                            onNoteClick = { note -> viewModel.openNote(note) },
-                            onFabClick = { viewModel.createNote() }
-                        )
+                    AnimatedContent(
+                        targetState = isEditorOpen,
+                        transitionSpec = {
+                            if (targetState) {
+                                // Opening editor: slide in from right
+                                slideInHorizontally { width -> width } togetherWith
+                                    slideOutHorizontally { width -> -width / 4 }
+                            } else {
+                                // Closing editor: slide out to right
+                                slideInHorizontally { width -> -width / 4 } togetherWith
+                                    slideOutHorizontally { width -> width }
+                            }
+                        },
+                        label = "ScreenTransition"
+                    ) { showEditor ->
+                        if (showEditor) {
+                            EditorScreen(
+                                viewModel = viewModel,
+                                onBack = { viewModel.closeEditor() }
+                            )
+                        } else {
+                            DashboardScreen(
+                                viewModel = viewModel,
+                                listState = listState,
+                                onSelectFolder = { openDocumentTreeLauncher.launch(null) },
+                                onNoteClick = { note -> viewModel.openNote(note) },
+                                onFabClick = { viewModel.createNote() }
+                            )
+                        }
                     }
                 }
             }

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.waph1.markit"
-    android:versionCode="4"
-    android:versionName="0.2.1" >
+    android:versionCode="5"
+    android:versionName="0.2.2" >
 
     <uses-sdk
         android:minSdkVersion="24"
@@ -60,6 +60,11 @@
                 android:name="androidx.profileinstaller.ProfileInstallerInitializer"
                 android:value="androidx.startup" />
         </provider>
+
+        <service
+            android:name="androidx.room.MultiInstanceInvalidationService"
+            android:directBootAware="true"
+            android:exported="false" />
 
         <receiver
             android:name="androidx.profileinstaller.ProfileInstallReceiver"

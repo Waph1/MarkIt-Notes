@@ -9,7 +9,7 @@
     <color name="teal_700">#FF018786</color>
     <color name="white">#FFFFFFFF</color>
     <string name="add_note">Add Note</string>
-    <string name="app_name">MarkIt</string>
+    <string name="app_name">MarkIt Notes</string>
     <string name="clear_search">Clear Search</string>
     <string name="folder_access_needed">Folder Access Needed</string>
     <string name="folder_access_rationale">MarkIt needs access to a folder to read and save your markdown notes.</string>
