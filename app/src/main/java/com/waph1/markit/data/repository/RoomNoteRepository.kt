@@ -55,6 +55,12 @@ class RoomNoteRepository(
             entities.map { it.toNote() }
         }
     }
+
+    override fun getAllNotesWithArchive(): Flow<List<Note>> {
+        return noteDao.getAllNotesWithArchive().map { entities ->
+            entities.map { it.toNote() }
+        }
+    }
     
     fun getTrashedNotes(): Flow<List<Note>> {
         return noteDao.getTrashedNotes().map { entities ->
@@ -93,6 +99,24 @@ class RoomNoteRepository(
             return@withContext true
         }
         return@withContext false
+    }
+
+    override suspend fun deleteLabel(name: String): Boolean = withContext(Dispatchers.IO) {
+        val root = rootDir ?: return@withContext false
+        
+        // 1. Check if empty in DB
+        val count = noteDao.countNotesInFolder(name)
+        if (count > 0) return@withContext false
+        
+        // 2. Delete from disk (Active, Archive, Deleted subfolders)
+        root.findFile(name)?.delete()
+        root.findFile(".Archive")?.findFile(name)?.delete()
+        root.findFile(".Deleted")?.findFile(name)?.delete()
+        
+        // 3. Delete from DB
+        labelDao.delete(name)
+        
+        return@withContext true
     }
     
     override suspend fun getNote(id: String): Note? {
@@ -274,13 +298,33 @@ class RoomNoteRepository(
     
     override suspend fun moveNotes(notes: List<Note>, targetFolder: String) = withContext(Dispatchers.IO) {
         val root = rootDir ?: return@withContext
-        val targetFolderDoc = root.findFile(targetFolder) ?: root.createDirectory(targetFolder)
         
         notes.forEach { note ->
             val fileName = note.file.name
             val sourceFolder = note.folder
-            val sourceFile = root.findFile(sourceFolder)?.findFile(fileName)
+            val isArchived = note.isArchived
+            val isTrashed = note.isTrashed
+
+            // Determine Root based on status
+            val effectiveRoot = when {
+                isTrashed -> root.findFile(".Deleted")
+                isArchived -> root.findFile(".Archive")
+                else -> root
+            }
+
+            // Source File
+            val sourceFile = effectiveRoot?.findFile(sourceFolder)?.findFile(fileName)
             
+            // Target Folder logic
+            // Maintain status: If archived, move within .Archive. If active, move within root.
+            val targetRoot = when {
+                isTrashed -> root.findFile(".Deleted")
+                isArchived -> root.findFile(".Archive") ?: root.createDirectory(".Archive")
+                else -> root
+            }
+            
+            val targetFolderDoc = targetRoot?.findFile(targetFolder) ?: targetRoot?.createDirectory(targetFolder)
+
             if (sourceFile != null && targetFolderDoc != null) {
                 val content = readText(sourceFile)
                 val newFile = targetFolderDoc.createFile("text/markdown", fileName)
@@ -431,6 +475,17 @@ class RoomNoteRepository(
         } catch (e: Exception) {
             ""
         }
+    }
+    
+    override suspend fun emptyTrash() = withContext(Dispatchers.IO) {
+        val root = rootDir ?: return@withContext
+        val deletedDir = root.findFile(".Deleted")
+        
+        deletedDir?.listFiles()?.forEach { 
+            it.delete()
+        }
+        
+        noteDao.deleteAllTrashed()
     }
     
     // --- Converters ---

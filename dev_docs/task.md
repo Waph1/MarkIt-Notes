@@ -88,9 +88,28 @@
     - [x] UX: Long-press anywhere to select
     - [x] UI: Simplified Selection Header (Count only)
     - [x] UX: Delete Confirmation Dialog
-- [x] Launch Prep
-    - [x] Rebrand: Name change to "MarkIt"
-    - [x] Rebrand: New App Icon
-    - [x] Git: Initialize Repository
-    - [x] Git: Commit Initial Code
-    - [x] Git: Push to GitHub
+- [x] Refinements (v8)
+    - [x] Feature: Empty Trash action
+    - [x] Feature: Delete Empty Labels (Long-press in Drawer)
+    - [x] UX: Smooth overlay transitions between Dashboard and Editor
+    - [x] Fix: Scrolling glitches in Staggered Grid
+    - [x] Fix: Splash screen flash (Theme support + Logo)
+    - [x] Fix: WebView white flash in Dark Mode
+    - [x] Fix: Preserving Archive status on Move <!-- id: 100 -->
+- [x] Feature: Intelligent Search <!-- id: 101 -->
+    - [x] Logic: "Search everywhere" fallback if no local results <!-- id: 102 -->
+    - [x] UI: "Search everywhere" header indicator <!-- id: 103 -->
+- [x] Feature: Localization <!-- id: 111 -->
+    - [x] Externalize all UI strings to strings.xml <!-- id: 112 -->
+    - [x] Implement Italian translation (values-it) <!-- id: 113 -->
+- [x] Feature: View Mode Toggle <!-- id: 114 -->
+    - [x] Add GRID/LIST persistence to PrefsManager <!-- id: 115 -->
+    - [x] Add toggle button to SearchBar <!-- id: 116 -->
+    - [x] Implement 1 vs 2 column logic in NoteGrid <!-- id: 117 -->
+- [x] Launch Prep <!-- id: 104 -->
+    - [x] Rebrand: Name change to "MarkIt" <!-- id: 105 -->
+    - [x] Rebrand: New App Icon <!-- id: 106 -->
+    - [x] Version: Bump to 0.4.0 <!-- id: 107 -->
+    - [x] Git: Initialize Repository <!-- id: 108 -->
+    - [x] Git: Commit Initial Code <!-- id: 109 -->
+    - [x] Git: Push to GitHub <!-- id: 110 -->

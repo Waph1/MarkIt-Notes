@@ -14,13 +14,13 @@
 
         /* Light Mode (Default) */
         body {
-            background-color: #ffffff;
+            background-color: transparent;
             color: #202124;
         }
 
         /* Dark Mode */
         body.dark-mode {
-            background-color: #121212;
+            background-color: transparent;
             color: #e8eaed;
         }
 
@@ -119,6 +119,11 @@
 </head>
 
 <body>
+    <script>
+        if (new URLSearchParams(window.location.search).get('dark') === 'true') {
+            document.body.classList.add('dark-mode');
+        }
+    </script>
     <div id="content"></div>
 
     <script src="markdown-it.min.js"></script>

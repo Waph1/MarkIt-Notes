@@ -42,8 +42,14 @@ class MainViewModel(
     private val _sortDirection = MutableStateFlow(prefsManager.getSortDirection())
     val sortDirection: StateFlow<PrefsManager.SortDirection> = _sortDirection.asStateFlow()
 
+    private val _viewMode = MutableStateFlow(prefsManager.getViewMode())
+    val viewMode: StateFlow<PrefsManager.ViewMode> = _viewMode.asStateFlow()
+
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    private val _isSearchEverywhere = MutableStateFlow(false)
+    val isSearchEverywhere: StateFlow<Boolean> = _isSearchEverywhere.asStateFlow()
 
     // Notes Flow: Reacts to filter changes and queries appropriate DAO method
     @OptIn(kotlinx.coroutines.FlowPreview::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -56,19 +62,34 @@ class MainViewModel(
                 is NoteFilter.Trash -> repository.getTrashedNotes()
             }
         },
+        repository.getAllNotesWithArchive(),
         _sortOrder,
         _sortDirection,
         _searchQuery
             .debounce(300L)
             .distinctUntilChanged()
-    ) { notesList, order, direction, query ->
+    ) { notesList, allNotesList, order, direction, query ->
         // Search Filter
+        val currentFilterValue = _currentFilter.value
         val searched = if (query.isBlank()) {
+            _isSearchEverywhere.value = false
             notesList
         } else {
             val q = query.lowercase()
-            notesList.filter { 
+            val filteredResults = notesList.filter { 
                 it.title.lowercase().contains(q) || it.content.lowercase().contains(q)
+            }
+            
+            if (filteredResults.isEmpty() && currentFilterValue !is NoteFilter.Trash) {
+                // Search everywhere (excluding Trash, but including Archive and all active notes)
+                val globalResults = allNotesList.filter {
+                    it.title.lowercase().contains(q) || it.content.lowercase().contains(q)
+                }
+                _isSearchEverywhere.value = globalResults.isNotEmpty()
+                globalResults
+            } else {
+                _isSearchEverywhere.value = false
+                filteredResults
             }
         }
         
@@ -169,6 +190,21 @@ class MainViewModel(
         }
     }
 
+    fun deleteLabel(name: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            val success = repository.deleteLabel(name)
+            if (success) {
+                val current = _tempLabels.value.toMutableSet()
+                if (current.remove(name)) {
+                    _tempLabels.value = current
+                }
+                onSuccess()
+            } else {
+                onError("Label must be empty to delete it")
+            }
+        }
+    }
+
     fun deleteNote(note: Note) {
         viewModelScope.launch {
             repository.deleteNote(note.file.name) 
@@ -207,6 +243,11 @@ class MainViewModel(
     fun setSortDirection(direction: PrefsManager.SortDirection) {
         _sortDirection.value = direction
         prefsManager.saveSortDirection(direction)
+    }
+
+    fun setViewMode(mode: PrefsManager.ViewMode) {
+        _viewMode.value = mode
+        prefsManager.saveViewMode(mode)
     }
 
     fun onSearchQueryChanged(query: String) {
@@ -313,6 +354,12 @@ class MainViewModel(
              // FileNoteRepository checks contains(file.path) || contains(file.name).
              // safest is passing paths.
              repository.togglePinStatus(selectedIds, shouldPin)
+        }
+    }
+
+    fun emptyTrash() {
+        viewModelScope.launch {
+            repository.emptyTrash()
         }
     }
 }

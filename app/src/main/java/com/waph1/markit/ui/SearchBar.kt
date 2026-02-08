@@ -9,6 +9,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.ViewStream
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -38,6 +40,7 @@ fun SearchBar(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val sortOrder by viewModel.sortOrder.collectAsState()
     val sortDirection by viewModel.sortDirection.collectAsState()
+    val viewMode by viewModel.viewMode.collectAsState()
     var showSortMenu by remember { mutableStateOf(false) }
 
     Row(
@@ -80,6 +83,20 @@ fun SearchBar(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+
+        // View Mode Toggle Button
+        IconButton(onClick = {
+            viewModel.setViewMode(
+                if (viewMode == PrefsManager.ViewMode.GRID) PrefsManager.ViewMode.LIST 
+                else PrefsManager.ViewMode.GRID
+            )
+        }) {
+            Icon(
+                imageVector = if (viewMode == PrefsManager.ViewMode.GRID) Icons.Default.ViewStream else Icons.Default.GridView,
+                contentDescription = if (viewMode == PrefsManager.ViewMode.GRID) stringResource(R.string.view_list) else stringResource(R.string.view_grid),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         // Sort Button (Right Edge)

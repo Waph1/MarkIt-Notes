@@ -1,4 +1,4 @@
-# MarkIt (v0.3.0)
+# MarkIt (v0.4.0)
 
 **MarkIt** is a modern, beautiful, and privacy-focused Markdown note-taking app for Android. Designed with a clean Google Keep-inspired aesthetic, it puts your content first while giving you the power of Markdown formatting.
 
@@ -7,22 +7,24 @@
 ## About
 MarkIt differs from other note apps by treating your notes as **real files**. There is no hidden database; every note is a plain text Markdown (`.md`) file stored in a folder of your choice on your device. This means you truly own your data—you can sync it, back it up, or open it with any other text editor.
 
-## Development Story
-This app is a personal project built by a single developer with extensive assistance from AI.
-
 ## Features
 
 *   **File-Based Storage**: Your notes are yours. Stored as local `.md` files.
-*   **Markdown Support**: Full Markdown rendering and editing (Bold, Italic, Lists, Code blocks, etc.).
-*   **Grid Layout**: A beautiful staggered grid view (like Google Keep) to see your notes at a glance.
+*   **Markdown Support**: Full Markdown rendering and editing (Bold, Italic, Lists, Checkbox, etc.).
+*   **Grid Layout**: A beautiful staggered grid view (like Google Keep) or a single-column list view.
+*   **Localization**: Support for English and Italian. Defaults to English.
 *   **Organization**:
     *   **Folders as Labels**: Use folders to organize notes into categories.
     *   **Pins**: Keep important notes at the top.
     *   **Colors**: Color-code your notes for visual grouping.
     *   **Archive & Trash**: Keep your workspace clutter-free.
+    *   **Label Management**: Long-press labels in the sidebar to delete empty ones.
+    *   **Empty Trash**: Permanently clear your trash with a single tap.
 *   **Privacy First**: No internet permissions required. No tracking. No cloud lock-in.
 *   **Modern UI**: Built with Jetpack Compose and Material 3, featuring Dark Mode support.
-*   **Search & Sort**: Powerful search with filtering and sorting options (by Date Modified, Created, or Title).
+*   **Smooth UX**: Splash screen matching theme, instant Dark Mode rendering, and fluid screen transitions.
+*   **Intelligent Search**: Powerful search with "Search everywhere" fallback. If no results are found in your current view, MarkIt automatically searches through all active and archived notes.
+*   **Advanced Sorting**: Sort notes by Date Modified, Created, or Title.
 
 ## Installation
 

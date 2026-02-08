@@ -48,6 +48,26 @@ adb install -r keepnotes/app/build/outputs/apk/debug/app-debug.apk
 4.  **Auto-Save & Persistence**:
     *   Change a note color. Close the app completely. Reopen. Color should persist.
     *   Create a note. Close app. Reopen. Note should load instantly (Caching).
+5.  **Label & Trash Management (v0.4.0)**:
+    *   **Delete Label**: Open sidebar, long-press a label. Confirm deletion. (Try with non-empty label to see error).
+    *   **Empty Trash**: Go to Trash view. Tap the Trash icon in the top bar. Confirm to clear all deleted notes.
+    *   **Archive from Editor**: Open a note, tap Archive. Verify it closes and moves to archive.
+    *   **Contextual Creation**: Go to a label (e.g. "Work"). Tap `+`. Note should already have "Work" label selected.
+    *   **Search everywhere**: 
+        *   Create a note in a label (e.g. "Work").
+        *   Switch to another label (e.g. "Home") where the note doesn't exist.
+        *   Search for that note.
+        *   Verify the note appears under a **"Search everywhere"** header.
+        *   Verify that while searching in "All Notes", archived notes also appear if no active notes match the query.
+4.  **Localization**:
+    *   Change the device language to **Italian**.
+    *   Open MarkIt and verify all UI elements (menus, buttons, hints, headers) are displayed in Italian.
+    *   Change the device language to any other language (e.g., French or back to English).
+    *   Verify the app defaults to **English**.
+5.  **View Mode**:
+    *   Locate the new button to the left of the Sort button in the Search Bar.
+    *   Tap it to switch between **Grid View** (2 columns) and **List View** (1 column).
+    *   Close and reopen the app to verify the selected view mode is persisted.
 
 
 ### 4. Startup & Labels Fixes (Debugging)

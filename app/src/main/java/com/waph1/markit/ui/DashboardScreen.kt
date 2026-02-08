@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -91,7 +92,7 @@ import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun DashboardScreen(
     viewModel: MainViewModel,
@@ -103,11 +104,17 @@ fun DashboardScreen(
     val notes by viewModel.notes.collectAsState()
     val labels by viewModel.labels.collectAsState()
     val isPermissionNeeded by viewModel.isPermissionNeeded.collectAsState()
+    val isSearchEverywhere by viewModel.isSearchEverywhere.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
     val currentFilter by viewModel.currentFilter.collectAsState()
+    val viewMode by viewModel.viewMode.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val context = LocalContext.current
     
-    // UI State
+    // ... (UI State remains the same)
     var showCreateLabelDialog by remember { mutableStateOf(false) }
+    var showEmptyTrashDialog by remember { mutableStateOf(false) }
+    var labelToDelete by remember { mutableStateOf<String?>(null) }
 
     if (showCreateLabelDialog) {
         CreateLabelDialog(
@@ -115,6 +122,65 @@ fun DashboardScreen(
             onConfirm = { name ->
                 viewModel.createLabel(name)
                 showCreateLabelDialog = false
+            }
+        )
+    }
+    
+    if (showEmptyTrashDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showEmptyTrashDialog = false },
+            title = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.empty_trash_title)) },
+            text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.empty_trash_message)) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        viewModel.emptyTrash()
+                        showEmptyTrashDialog = false
+                    }
+                ) {
+                    Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.empty_trash_confirm))
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showEmptyTrashDialog = false }) {
+                    Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (labelToDelete != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { labelToDelete = null },
+            title = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.delete_label_title)) },
+            text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.delete_label_message, labelToDelete!!)) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        val name = labelToDelete!!
+                        viewModel.deleteLabel(
+                            name = name,
+                            onSuccess = { 
+                                Toast.makeText(context, context.getString(com.waph1.markit.R.string.label_deleted_toast), Toast.LENGTH_SHORT).show()
+                            },
+                            onError = { error ->
+                                // Error is currently a raw string from ViewModel, but should be localized
+                                val localizedError = if (error == "Label must be empty to delete it") {
+                                    context.getString(com.waph1.markit.R.string.error_delete_label_not_empty)
+                                } else error
+                                Toast.makeText(context, localizedError, Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                        labelToDelete = null
+                    }
+                ) {
+                    Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.delete_label_confirm))
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { labelToDelete = null }) {
+                    Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.cancel))
+                }
             }
         )
     }
@@ -127,9 +193,12 @@ fun DashboardScreen(
     val selectedNotes by viewModel.selectedNotes.collectAsState()
     val isInSelectionMode = selectedNotes.isNotEmpty()
     
+    val selectedNotesList = notes.filter { selectedNotes.contains(it.file.path) }
+    val allSelectedArchived = selectedNotesList.isNotEmpty() && selectedNotesList.all { it.isArchived }
+    val allSelectedActive = selectedNotesList.isNotEmpty() && selectedNotesList.all { !it.isArchived && !it.isTrashed }
+    
     val drawerState = androidx.compose.material3.rememberDrawerState(androidx.compose.material3.DrawerValue.Closed)
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val context = LocalContext.current
     
     // Double back to exit state
     var lastBackPressTime by remember { mutableStateOf(0L) }
@@ -148,7 +217,7 @@ fun DashboardScreen(
                     (context as? ComponentActivity)?.finish()
                 } else {
                     lastBackPressTime = currentTime
-                    Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(com.waph1.markit.R.string.press_back_again_exit), Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -162,7 +231,7 @@ fun DashboardScreen(
             androidx.compose.material3.ModalDrawerSheet {
                 Column(modifier = Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
                     Text(
-                        "MarkIt",
+                        androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.app_name),
                         modifier = Modifier.padding(16.dp),
                         style = MaterialTheme.typography.headlineMedium
                     )
@@ -170,7 +239,7 @@ fun DashboardScreen(
                     
                     // Notes (All)
                     androidx.compose.material3.NavigationDrawerItem(
-                        label = { Text("All notes") },
+                        label = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.all_notes)) },
                         selected = currentFilter is MainViewModel.NoteFilter.All,
                         onClick = {
                             viewModel.setFilter(MainViewModel.NoteFilter.All)
@@ -183,26 +252,50 @@ fun DashboardScreen(
                     val visibleLabels = labels.filter { it != "Inbox" }
                     if (visibleLabels.isNotEmpty()) {
                         Text(
-                            "Labels",
+                            androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.labels),
                             modifier = Modifier.padding(16.dp),
                             style = MaterialTheme.typography.labelLarge
                         )
                         visibleLabels.forEach { label ->
-                            androidx.compose.material3.NavigationDrawerItem(
-                                label = { Text(label) },
-                                selected = (currentFilter as? MainViewModel.NoteFilter.Label)?.name == label,
-                                onClick = {
-                                    viewModel.setFilter(MainViewModel.NoteFilter.Label(label))
-                                    scope.launch { drawerState.close() }
-                                },
-                                modifier = Modifier.padding(horizontal = 12.dp)
-                            )
+                            val haptic = LocalHapticFeedback.current
+                            val isSelected = (currentFilter as? MainViewModel.NoteFilter.Label)?.name == label
+                            
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 12.dp, vertical = 2.dp)
+                                    .fillMaxWidth()
+                                    .height(56.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.secondaryContainer 
+                                        else androidx.compose.ui.graphics.Color.Transparent
+                                    )
+                                    .combinedClickable(
+                                        onClick = {
+                                            viewModel.setFilter(MainViewModel.NoteFilter.Label(label))
+                                            scope.launch { drawerState.close() }
+                                        },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            labelToDelete = label
+                                        }
+                                    )
+                                    .padding(horizontal = 16.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer 
+                                            else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                     
                     // New Label Button
                     androidx.compose.material3.NavigationDrawerItem(
-                        label = { Text("Create new label") },
+                        label = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.create_new_label)) },
                         icon = { Icon(Icons.Default.Add, contentDescription = null) },
                         selected = false,
                         onClick = {
@@ -216,7 +309,7 @@ fun DashboardScreen(
                     
                     // Archive
                     androidx.compose.material3.NavigationDrawerItem(
-                        label = { Text("Archive") },
+                        label = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.archive)) },
                         selected = currentFilter is MainViewModel.NoteFilter.Archive,
                         onClick = {
                             viewModel.setFilter(MainViewModel.NoteFilter.Archive)
@@ -227,7 +320,7 @@ fun DashboardScreen(
 
                     // Trash
                     androidx.compose.material3.NavigationDrawerItem(
-                        label = { Text("Trash") },
+                        label = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.trash)) },
                         selected = currentFilter is MainViewModel.NoteFilter.Trash,
                         onClick = {
                             viewModel.setFilter(MainViewModel.NoteFilter.Trash)
@@ -240,9 +333,9 @@ fun DashboardScreen(
         }
     ) {
         val title = when (currentFilter) {
-            is MainViewModel.NoteFilter.All -> "MarkIt"
-            is MainViewModel.NoteFilter.Trash -> "Trash"
-            is MainViewModel.NoteFilter.Archive -> "Archive"
+            is MainViewModel.NoteFilter.All -> androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.app_name)
+            is MainViewModel.NoteFilter.Trash -> androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.trash)
+            is MainViewModel.NoteFilter.Archive -> androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.archive)
             is MainViewModel.NoteFilter.Label -> (currentFilter as MainViewModel.NoteFilter.Label).name
         }
 
@@ -256,6 +349,8 @@ fun DashboardScreen(
                     SelectionTopAppBar(
                         selectionCount = selectedNotes.size,
                         currentFilter = currentFilter,
+                        allSelectedArchived = allSelectedArchived,
+                        allSelectedActive = allSelectedActive,
                         onClearSelection = { viewModel.clearSelection() },
                         onDelete = { viewModel.deleteSelectedNotes() },
                         onArchive = { viewModel.archiveSelectedNotes() },
@@ -290,7 +385,11 @@ fun DashboardScreen(
                              }
                         },
                         actions = {
-                            // Empty actions for now, as Sort moved to Search Bar
+                            if (currentFilter is MainViewModel.NoteFilter.Trash) {
+                                androidx.compose.material3.IconButton(onClick = { showEmptyTrashDialog = true }) {
+                                    Icon(Icons.Outlined.Delete, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.empty_trash_desc))
+                                }
+                            }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.surface
@@ -334,6 +433,9 @@ fun DashboardScreen(
                         selectedNotes = selectedNotes,
                         isInSelectionMode = isInSelectionMode,
                         isLoading = isLoading,
+                        isSearchEverywhere = isSearchEverywhere,
+                        searchQuery = searchQuery,
+                        viewMode = viewMode,
                         currentFilter = currentFilter,
                         listState = listState,
                         onNoteClick = { note ->
@@ -381,23 +483,40 @@ fun PermissionRequestState(
     }
 }
 
+private sealed interface DashboardUiItem {
+    val key: String
+    data class NoteItem(val note: Note) : DashboardUiItem {
+        override val key: String = note.file.path
+    }
+    data class HeaderItem(val title: String) : DashboardUiItem {
+        override val key: String = "header_$title"
+    }
+    object SpacerItem : DashboardUiItem {
+        override val key: String = "spacer_bottom"
+    }
+}
+
 @Composable
 fun NoteGrid(
     notes: List<Note>,
     selectedNotes: Set<String>,
     isInSelectionMode: Boolean,
     isLoading: Boolean,
+    isSearchEverywhere: Boolean,
+    searchQuery: String,
+    viewMode: PrefsManager.ViewMode,
     currentFilter: MainViewModel.NoteFilter,
     listState: LazyStaggeredGridState,
     onNoteClick: (Note) -> Unit,
     onNoteLongClick: (Note) -> Unit
 ) {
     if (isLoading && notes.isEmpty()) {
+        // ... (loading state remains the same)
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 androidx.compose.material3.CircularProgressIndicator()
                 Text(
-                    "Loading notes...",
+                    androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.loading_notes),
                     modifier = Modifier.padding(top = 16.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -405,6 +524,7 @@ fun NoteGrid(
             }
         }
     } else if (notes.isEmpty()) {
+        // ... (empty state remains the same)
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
@@ -414,118 +534,104 @@ fun NoteGrid(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
                 Text(
-                    "No notes yet",
+                    androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.no_results_found),
                     modifier = Modifier.padding(top = 16.dp),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    "Tap + to create your first note",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                )
             }
         }
     } else {
-        // If sorting by Label, split into Active and Archived
         val showSeparator = currentFilter is MainViewModel.NoteFilter.Label
-        
-        // Base Lists (excluding Archive/Trash logic which is handled by ViewModel filter)
-        // Wait, ViewModel already filters for Archive/Trash.
-        // If Filter is Label, we might have mixed Archived/Active if we didn't filter in VM?
-        // VM Logic for Label: `allNotes.filter { it.folder == filter.name && !it.isTrashed }`
-        // So Label view includes Archived notes? Yes.
-        
-        val effectiveNotes = notes
-        
-        // Pinned Logic: Only relevant if NOT Trash
         val isTrash = currentFilter is MainViewModel.NoteFilter.Trash
         val isArchive = currentFilter is MainViewModel.NoteFilter.Archive
         
-        // In Label View, we want: Pinned Active, Other Active, Archived.
-        // In All View: Pinned, Others.
+        // Define string values for remember keys
+        val searchEverywhereLabel = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.search_everywhere)
+        val searchResultsLabel = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.search_results)
+        val pinnedLabel = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.pinned)
+        val othersLabel = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.others)
+        val archivedNotesLabel = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.archived_notes_header)
+
+        val uiItems = remember(notes, currentFilter, isSearchEverywhere, searchQuery) {
+            val list = mutableListOf<DashboardUiItem>()
+            
+            if (isSearchEverywhere) {
+                list.add(DashboardUiItem.HeaderItem(searchEverywhereLabel))
+                notes.forEach { list.add(DashboardUiItem.NoteItem(it)) }
+            } else if (searchQuery.isNotBlank()) {
+                list.add(DashboardUiItem.HeaderItem(searchResultsLabel))
+                notes.forEach { list.add(DashboardUiItem.NoteItem(it)) }
+            } else if (isTrash || isArchive) {
+                notes.forEach { list.add(DashboardUiItem.NoteItem(it)) }
+            } else {
+                 val pinned = notes.filter { it.isPinned && !it.isArchived }
+                 val others = notes.filter { !it.isPinned && !it.isArchived }
+                 val archived = notes.filter { it.isArchived }
+
+                 if (pinned.isNotEmpty()) {
+                     list.add(DashboardUiItem.HeaderItem(pinnedLabel))
+                     pinned.forEach { list.add(DashboardUiItem.NoteItem(it)) }
+                 }
+
+                 if (pinned.isNotEmpty() && others.isNotEmpty()) {
+                     list.add(DashboardUiItem.HeaderItem(othersLabel))
+                 }
+                 others.forEach { list.add(DashboardUiItem.NoteItem(it)) }
+
+                 if (archived.isNotEmpty() && showSeparator) {
+                    list.add(DashboardUiItem.HeaderItem(archivedNotesLabel))
+                    archived.forEach { list.add(DashboardUiItem.NoteItem(it)) }
+                 }
+            }
+            // Add Spacer at the end
+            list.add(DashboardUiItem.SpacerItem)
+            list
+        }
+
+        val columns = if (viewMode == PrefsManager.ViewMode.GRID) 2 else 1
 
         LazyVerticalStaggeredGrid(
-            columns = StaggeredGridCells.Fixed(2),
+            columns = StaggeredGridCells.Fixed(columns),
             state = listState,
-            contentPadding = PaddingValues(bottom = 80.dp),
+            contentPadding = PaddingValues(0.dp),
             verticalItemSpacing = 8.dp,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-             if (isTrash || isArchive) {
-                 // Simple List
-                 items(effectiveNotes) { note ->
-                    NoteCard(
-                        note = note, 
-                        isSelected = selectedNotes.contains(note.file.path),
-                        onClick = { onNoteClick(note) },
-                        onLongClick = { onNoteLongClick(note) }
-                    )
-                 }
-             } else {
-                 val pinned = effectiveNotes.filter { it.isPinned && !it.isArchived }
-                 val others = effectiveNotes.filter { !it.isPinned && !it.isArchived }
-                 val archived = effectiveNotes.filter { it.isArchived } // For Label view
-
-                 // Pinned Section
-                 if (pinned.isNotEmpty()) {
-                     item(span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
-                         Text(
-                             text = "Pinned",
-                             style = MaterialTheme.typography.labelSmall,
-                             modifier = Modifier.padding(start = 8.dp, bottom = 4.dp, top = 8.dp)
-                         )
-                     }
-                     items(pinned) { note ->
-                        NoteCard(
-                            note = note, 
-                            isSelected = selectedNotes.contains(note.file.path),
-                            onClick = { onNoteClick(note) },
-                            onLongClick = { onNoteLongClick(note) }
-                        )
-                     }
-                 }
-
-                 // Others Section header (only if pinned exists)
-                 if (pinned.isNotEmpty() && others.isNotEmpty()) {
-                     item(span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
-                         Text(
-                             text = "Others",
-                             style = MaterialTheme.typography.labelSmall,
-                             modifier = Modifier.padding(start = 8.dp, bottom = 4.dp, top = 16.dp)
-                         )
-                     }
-                 }
-                 
-                 // Others Items
-                 items(others) { note ->
-                    NoteCard(
-                        note = note, 
-                        isSelected = selectedNotes.contains(note.file.path),
-                        onClick = { onNoteClick(note) },
-                        onLongClick = { onNoteLongClick(note) }
-                    )
-                 }
-
-                 // Archived Section (For Label View)
-                 if (archived.isNotEmpty() && showSeparator) {
-                    item(span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
-                         Column(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
-                             Text("Archived notes", style = MaterialTheme.typography.labelLarge)
-                             androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
-                         }
+            items(
+                items = uiItems,
+                key = { it.key },
+                span = { item ->
+                    if (item is DashboardUiItem.HeaderItem || item is DashboardUiItem.SpacerItem) StaggeredGridItemSpan.FullLine
+                    else StaggeredGridItemSpan.SingleLane
+                }
+            ) { item ->
+                when (item) {
+                    is DashboardUiItem.HeaderItem -> {
+                        Column(modifier = Modifier.fillMaxWidth().padding(start = 8.dp, bottom = 4.dp, top = 8.dp)) {
+                             Text(
+                                 text = item.title,
+                                 style = MaterialTheme.typography.labelSmall
+                             )
+                             if (item.title == "Archived notes") {
+                                 androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+                             }
+                        }
                     }
-                    items(archived) { note ->
+                    is DashboardUiItem.NoteItem -> {
                         NoteCard(
-                            note = note, 
-                            isSelected = selectedNotes.contains(note.file.path),
-                            onClick = { onNoteClick(note) },
-                            onLongClick = { onNoteLongClick(note) }
+                            note = item.note, 
+                            isSelected = selectedNotes.contains(item.note.file.path),
+                            onClick = { onNoteClick(item.note) },
+                            onLongClick = { onNoteLongClick(item.note) }
                         )
                     }
-                 }
-             }
+                    is DashboardUiItem.SpacerItem -> {
+                         androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(80.dp).fillMaxWidth())
+                    }
+                }
+            }
         }
     }
 }
@@ -624,6 +730,8 @@ fun NoteCard(
 fun SelectionTopAppBar(
     selectionCount: Int,
     currentFilter: MainViewModel.NoteFilter,
+    allSelectedArchived: Boolean,
+    allSelectedActive: Boolean,
     onClearSelection: () -> Unit,
     onDelete: () -> Unit,
     onArchive: () -> Unit,
@@ -649,13 +757,13 @@ fun SelectionTopAppBar(
     }
     
     val isTrash = currentFilter is MainViewModel.NoteFilter.Trash
-    val isArchive = currentFilter is MainViewModel.NoteFilter.Archive
-
+    // isArchive is no longer the sole determinant for Restore visibility
+    
     if (showDeleteDialog) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete selected notes?") },
-            text = { Text("Are you sure you want to delete these $selectionCount notes?") },
+            title = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.delete_selected_notes_title)) },
+            text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.delete_selected_notes_message, selectionCount)) },
             confirmButton = {
                 androidx.compose.material3.TextButton(
                     onClick = {
@@ -663,12 +771,12 @@ fun SelectionTopAppBar(
                         showDeleteDialog = false
                     }
                 ) {
-                    Text("Delete")
+                    Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.delete))
                 }
             },
             dismissButton = {
                 androidx.compose.material3.TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("Cancel")
+                    Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.cancel))
                 }
             }
         )
@@ -684,28 +792,29 @@ fun SelectionTopAppBar(
         },
         navigationIcon = {
             androidx.compose.material3.IconButton(onClick = onClearSelection) {
-                Icon(Icons.Default.Close, contentDescription = "Close Selection")
+                Icon(Icons.Default.Close, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.close_selection))
             }
         },
         actions = {
-             // Restore (Visible if Trash or Archive)
-             if (isTrash || isArchive) {
+             // Restore / Unarchive
+             // Show if in Trash OR (All Selected are Archived)
+             if (isTrash || allSelectedArchived) {
                  androidx.compose.material3.IconButton(onClick = onRestore) {
-                     Icon(Icons.Outlined.Refresh, contentDescription = "Restore") // Use Refresh or Restore icon
+                     Icon(Icons.Outlined.Refresh, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.restore)) // Use Refresh or Restore icon
                  }
              }
              
              // Move (Hidden in Trash)
              if (!isTrash) {
                  androidx.compose.material3.IconButton(onClick = { showMoveMenu = true }) {
-                     Icon(Icons.AutoMirrored.Outlined.DriveFileMove, contentDescription = "Move") 
+                     Icon(Icons.AutoMirrored.Outlined.DriveFileMove, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.move)) 
                  }
                  DropdownMenu(
                      expanded = showMoveMenu,
                      onDismissRequest = { showMoveMenu = false }
                  ) {
                       DropdownMenuItem(
-                         text = { Text("Inbox") },
+                         text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.inbox)) },
                          onClick = { 
                              onMove("Inbox")
                              showMoveMenu = false
@@ -722,7 +831,7 @@ fun SelectionTopAppBar(
                       }
                       androidx.compose.material3.HorizontalDivider()
                       DropdownMenuItem(
-                          text = { Text("Create new label") },
+                          text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.create_new_label)) },
                           leadingIcon = { Icon(Icons.Default.Add, null) },
                           onClick = { 
                               showMoveMenu = false
@@ -731,33 +840,25 @@ fun SelectionTopAppBar(
                       )
                  }
              }
-             
-             // Archive (Hidden in Trash and Archive)
-             if (!isTrash && !isArchive) {
-                 androidx.compose.material3.IconButton(onClick = onArchive) {
-                     Icon(Icons.Outlined.Archive, contentDescription = "Archive")
-                 }
-                 
-                 // Color Picker
+
+             // Color Picker
+             // Allowed for Active and Archived? User said "remove archive or restore option".
+             // We'll allow Color for Archived notes as it's useful.
+             if (!isTrash) {
                  Box {
                       androidx.compose.material3.IconButton(onClick = { showColorMenu = true }) {
-                          // Use a circle or palette icon. Using a simple Circle for now or generic icon.
-                          // Material Icons doesn't have Palette in Default easily without extended.
-                          // Draw a circle.
                           Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray))
                       }
                       DropdownMenu(
                           expanded = showColorMenu,
                           onDismissRequest = { showColorMenu = false }
                       ) {
-                          // Simple grid or list of colors
                           val colors = listOf(
                                0xFFFFFFFF, 0xFFF28B82, 0xFFFBBC04, 0xFFFFF475, 
                                0xFFCCFF90, 0xFFA7FFEB, 0xFFCBF0F8, 0xFFAECBFA, 
                                0xFFD7AEFB, 0xFFFDCFE8, 0xFFE6C9A8, 0xFFE8EAED
                           )
                           
-                          // Use Rows of 4
                           Column(modifier = Modifier.padding(8.dp)) {
                               colors.chunked(4).forEach { rowColors ->
                                   androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -782,16 +883,25 @@ fun SelectionTopAppBar(
                  }
              }
              
-             // Pin/Unpin (Hidden in Trash and Archive)
-             if (!isTrash && !isArchive) {
+             // Pin/Unpin (Hidden in Trash, and only for Active notes?)
+             // Pinning archived notes usually implies unarchiving or just pinning in archive.
+             // We'll restrict to Active notes to keep it simple and consistent.
+             if (!isTrash && allSelectedActive) {
                  androidx.compose.material3.IconButton(onClick = onPin) {
-                     Icon(Icons.Outlined.Star, contentDescription = "Pin/Unpin")
+                     Icon(Icons.Outlined.Star, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.pin_unpin))
+                 }
+             }
+
+             // Archive (Hidden in Trash, and only for Active notes)
+             if (!isTrash && allSelectedActive) {
+                 androidx.compose.material3.IconButton(onClick = onArchive) {
+                     Icon(Icons.Outlined.Archive, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.archive))
                  }
              }
              
              // Delete
              androidx.compose.material3.IconButton(onClick = { showDeleteDialog = true }) {
-                 Icon(Icons.Outlined.Delete, contentDescription = "Delete")
+                 Icon(Icons.Outlined.Delete, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.delete))
              }
         },
         colors = TopAppBarDefaults.topAppBarColors(
@@ -809,12 +919,12 @@ fun CreateLabelDialog(
     
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Create new label") },
+        title = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.create_new_label)) },
         text = { 
             androidx.compose.material3.OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                label = { Text("Label name") },
+                label = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.label_name_hint)) },
                 singleLine = true
             )
         },
@@ -823,12 +933,12 @@ fun CreateLabelDialog(
                 onClick = { onConfirm(text) },
                 enabled = text.isNotBlank()
             ) {
-                Text("Create")
+                Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.create))
             }
         },
         dismissButton = {
             androidx.compose.material3.TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.cancel))
             }
         }
     )

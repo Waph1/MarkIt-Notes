@@ -23,12 +23,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
+import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -71,7 +73,8 @@ import java.util.Date
 @Composable
 fun EditorScreen(
     viewModel: MainViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    initialLabel: String = ""
 ) {
     val currentNote by viewModel.currentNote.collectAsState()
     val labels by viewModel.labels.collectAsState()
@@ -79,7 +82,12 @@ fun EditorScreen(
     var title by remember { mutableStateOf(currentNote?.title ?: "") }
     var content by remember { mutableStateOf(TextFieldValue(currentNote?.content ?: "")) }
     var color by remember { mutableStateOf(currentNote?.color ?: 0xFFFFFFFF) }
-    var folder by remember { mutableStateOf(currentNote?.folder?.takeIf { it != "Unknown" && it != "Inbox" } ?: "") }
+    var folder by remember(currentNote, initialLabel) { 
+        mutableStateOf(
+            currentNote?.folder?.takeIf { it != "Unknown" && it != "Inbox" } 
+            ?: initialLabel
+        ) 
+    }
     
     // UI States
     var showLabelMenu by remember { mutableStateOf(false) }
@@ -117,7 +125,7 @@ fun EditorScreen(
     fun saveNote() {
         if (title.isNotEmpty() || content.text.isNotEmpty()) {
             val parentPath = if (folder.isEmpty()) "Inbox" else folder
-            val fileName = currentNote?.file?.name?.takeIf { it.isNotEmpty() } ?: ""
+            val fileName = currentNote?.file?.name?.takeIf { it.isNotEmpty() } ?: "new_note_placeholder"
             val fileObj = File(parentPath, fileName)
             
             val note = Note(
@@ -194,11 +202,11 @@ fun EditorScreen(
                             saveNote()
                             isEditing = false
                         }) {
-                            Icon(Icons.Default.Check, contentDescription = "Done")
+                            Icon(Icons.Outlined.Check, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.done))
                         }
                     } else {
                         IconButton(onClick = { onBack() }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.back))
                         }
                     }
                 },
@@ -206,7 +214,7 @@ fun EditorScreen(
                     // Label Selector
                     Box {
                         IconButton(onClick = { showLabelMenu = true }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Label", 
+                            Icon(Icons.AutoMirrored.Outlined.DriveFileMove, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.label), 
                                  modifier = Modifier.size(20.dp))
                         }
                         DropdownMenu(
@@ -214,7 +222,7 @@ fun EditorScreen(
                             onDismissRequest = { showLabelMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Inbox (No Label)") },
+                                text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.inbox_no_label)) },
                                 onClick = { folder = ""; showLabelMenu = false }
                             )
                             labels.forEach { label ->
@@ -226,8 +234,8 @@ fun EditorScreen(
                             }
                             HorizontalDivider()
                             DropdownMenuItem(
-                                text = { Text("Create new label") },
-                                leadingIcon = { Icon(Icons.Default.Add, null) },
+                                text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.create_new_label)) },
+                                leadingIcon = { Icon(Icons.Outlined.Add, null) },
                                 onClick = { 
                                     showLabelMenu = false
                                     showCreateLabelDialog = true
@@ -239,26 +247,45 @@ fun EditorScreen(
                     if (!isEditing) {
                         // Edit button
                         IconButton(onClick = { isEditing = true }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Edit")
+                            Icon(Icons.Outlined.Edit, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.edit))
                         }
                     }
                     
-                    // Delete/Restore
+                    // Delete/Restore & Archive
                     val currentNoteObj = currentNote
                     if (currentNoteObj != null) {
+                        // Archive/Unarchive (if not Trashed)
+                        if (!currentNoteObj.isTrashed) {
+                             if (currentNoteObj.isArchived) {
+                                 IconButton(onClick = { 
+                                     viewModel.restoreNote(currentNoteObj)
+                                     onBack()
+                                 }) {
+                                     Icon(Icons.Outlined.Refresh, androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.unarchive))
+                                 }
+                             } else {
+                                 IconButton(onClick = { 
+                                     viewModel.archiveNote(currentNoteObj)
+                                     onBack()
+                                 }) {
+                                     Icon(Icons.Outlined.Archive, androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.archive))
+                                 }
+                             }
+                        }
+
                         if (currentNoteObj.isTrashed) {
                             IconButton(onClick = { 
                                 viewModel.restoreNote(currentNoteObj)
                                 onBack() 
                             }) {
-                                Icon(Icons.Default.Refresh, "Restore")
+                                Icon(Icons.Outlined.Refresh, androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.restore))
                             }
                         } else {
                             IconButton(onClick = { 
                                 viewModel.deleteNote(currentNoteObj)
                                 onBack()
                             }) {
-                                Icon(Icons.Default.Delete, "Delete")
+                                Icon(Icons.Outlined.Delete, androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.delete))
                             }
                         }
                     }
@@ -373,11 +400,11 @@ fun EditorScreen(
                                         onDismissRequest = { showMathMenu = false }
                                     ) {
                                         DropdownMenuItem(
-                                            text = { Text("Inline $...$") },
+                                            text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.inline_math)) },
                                             onClick = { insertAtCursor("$", "$"); showMathMenu = false }
                                         )
                                         DropdownMenuItem(
-                                            text = { Text("Block $$...$$") },
+                                            text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.block_math)) },
                                             onClick = { insertAtCursor("$$\n", "\n$$"); showMathMenu = false }
                                         )
                                     }
@@ -410,7 +437,7 @@ fun EditorScreen(
                 TextField(
                     value = title,
                     onValueChange = { title = it },
-                    placeholder = { Text("Title") },
+                    placeholder = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.title_hint)) },
                     textStyle = MaterialTheme.typography.headlineMedium,
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
@@ -435,7 +462,7 @@ fun EditorScreen(
                         Box {
                             if (content.text.isEmpty()) {
                                 Text(
-                                    "Start typing...",
+                                    androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.start_typing_hint),
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -580,6 +607,7 @@ fun PreviewWebView(
     androidx.compose.ui.viewinterop.AndroidView(
         factory = { context ->
             android.webkit.WebView(context).apply {
+                setBackgroundColor(0) // Transparent
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.allowFileAccess = true
@@ -604,7 +632,7 @@ fun PreviewWebView(
                     }
                 }
                 
-                loadUrl("file:///android_asset/preview/preview.html")
+                loadUrl("file:///android_asset/preview/preview.html?dark=$isDark")
             }
         },
         update = { view ->

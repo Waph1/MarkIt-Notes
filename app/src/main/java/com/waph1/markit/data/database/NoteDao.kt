@@ -12,6 +12,9 @@ interface NoteDao {
     
     @Query("SELECT * FROM notes WHERE isTrashed = 0 AND isArchived = 0 ORDER BY isPinned DESC, lastModifiedMs DESC")
     fun getAllActiveNotes(): Flow<List<NoteEntity>>
+
+    @Query("SELECT * FROM notes WHERE isTrashed = 0 ORDER BY isPinned DESC, lastModifiedMs DESC")
+    fun getAllNotesWithArchive(): Flow<List<NoteEntity>>
     
     @Query("SELECT * FROM notes WHERE isTrashed = 1 ORDER BY lastModifiedMs DESC")
     fun getTrashedNotes(): Flow<List<NoteEntity>>
@@ -57,4 +60,10 @@ interface NoteDao {
     
     @Query("UPDATE notes SET isArchived = 0, isTrashed = 0 WHERE filePath = :filePath")
     suspend fun restoreNote(filePath: String)
+    
+    @Query("SELECT COUNT(*) FROM notes WHERE folder = :folder")
+    suspend fun countNotesInFolder(folder: String): Int
+    
+    @Query("DELETE FROM notes WHERE isTrashed = 1")
+    suspend fun deleteAllTrashed()
 }

@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface NoteRepository {
     fun getAllNotes(): Flow<List<Note>>
+    fun getAllNotesWithArchive(): Flow<List<Note>>
     suspend fun getNote(id: String): Note?
     suspend fun saveNote(note: Note, oldFile: java.io.File? = null): String
     suspend fun deleteNote(id: String)
@@ -21,4 +22,6 @@ interface NoteRepository {
     
     fun getLabels(): Flow<List<String>>
     suspend fun createLabel(name: String): Boolean
+    suspend fun deleteLabel(name: String): Boolean
+    suspend fun emptyTrash()
 }

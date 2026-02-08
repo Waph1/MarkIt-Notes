@@ -83,33 +83,28 @@ class MainActivity : ComponentActivity() {
                     val isEditorOpen by viewModel.isEditorOpen.collectAsState()
                     val listState = rememberLazyStaggeredGridState()
                     
-                    AnimatedContent(
-                        targetState = isEditorOpen,
-                        transitionSpec = {
-                            if (targetState) {
-                                // Opening editor: slide in from right
-                                slideInHorizontally { width -> width } togetherWith
-                                    slideOutHorizontally { width -> -width / 4 }
-                            } else {
-                                // Closing editor: slide out to right
-                                slideInHorizontally { width -> -width / 4 } togetherWith
-                                    slideOutHorizontally { width -> width }
-                            }
-                        },
-                        label = "ScreenTransition"
-                    ) { showEditor ->
-                        if (showEditor) {
+                    androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
+                        DashboardScreen(
+                            viewModel = viewModel,
+                            listState = listState,
+                            onSelectFolder = { openDocumentTreeLauncher.launch(null) },
+                            onNoteClick = { note -> viewModel.openNote(note) },
+                            onFabClick = { viewModel.createNote() }
+                        )
+
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = isEditorOpen,
+                            enter = slideInHorizontally { width -> width },
+                            exit = slideOutHorizontally { width -> width },
+                            label = "EditorTransition"
+                        ) {
+                            val filter = viewModel.currentFilter.value
+                            val label = if (filter is MainViewModel.NoteFilter.Label) filter.name else ""
+                            
                             EditorScreen(
                                 viewModel = viewModel,
-                                onBack = { viewModel.closeEditor() }
-                            )
-                        } else {
-                            DashboardScreen(
-                                viewModel = viewModel,
-                                listState = listState,
-                                onSelectFolder = { openDocumentTreeLauncher.launch(null) },
-                                onNoteClick = { note -> viewModel.openNote(note) },
-                                onFabClick = { viewModel.createNote() }
+                                onBack = { viewModel.closeEditor() },
+                                initialLabel = label
                             )
                         }
                     }

@@ -8,6 +8,7 @@ import com.waph1.markit.data.model.Note
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.OutputStreamWriter
@@ -46,7 +47,13 @@ class FileNoteRepository(
         refreshNotes()
     }
 
-    override fun getAllNotes(): Flow<List<Note>> = _notes
+    override fun getAllNotes(): Flow<List<Note>> = _notes.map { list ->
+        list.filter { !it.isArchived && !it.isTrashed }
+    }
+
+    override fun getAllNotesWithArchive(): Flow<List<Note>> = _notes.map { list ->
+        list.filter { !it.isTrashed }
+    }
 
     suspend fun refreshNotes() = withContext(Dispatchers.IO) {
         _isLoading.value = true
@@ -691,4 +698,8 @@ class FileNoteRepository(
         }
         return@withContext false
     }
+
+    override suspend fun deleteLabel(name: String): Boolean = false
+
+    override suspend fun emptyTrash() {}
 }

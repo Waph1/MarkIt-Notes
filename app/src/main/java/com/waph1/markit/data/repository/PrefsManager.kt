@@ -10,6 +10,7 @@ class PrefsManager(context: Context) {
         private const val KEY_ROOT_URI = "root_uri"
         private const val KEY_SORT_ORDER = "sort_order"
         private const val KEY_SORT_DIRECTION = "sort_direction"
+        private const val KEY_VIEW_MODE = "view_mode"
     }
 
     enum class SortOrder {
@@ -21,6 +22,11 @@ class PrefsManager(context: Context) {
     enum class SortDirection {
         ASCENDING,
         DESCENDING
+    }
+
+    enum class ViewMode {
+        GRID,
+        LIST
     }
 
     fun saveSortOrder(order: SortOrder) {
@@ -46,6 +52,19 @@ class PrefsManager(context: Context) {
             SortDirection.valueOf(name ?: SortDirection.DESCENDING.name)
         } catch (e: Exception) {
             SortDirection.DESCENDING
+        }
+    }
+
+    fun saveViewMode(mode: ViewMode) {
+        prefs.edit().putString(KEY_VIEW_MODE, mode.name).apply()
+    }
+
+    fun getViewMode(): ViewMode {
+        val name = prefs.getString(KEY_VIEW_MODE, ViewMode.GRID.name)
+        return try {
+            ViewMode.valueOf(name ?: ViewMode.GRID.name)
+        } catch (e: Exception) {
+            ViewMode.GRID
         }
     }
 
