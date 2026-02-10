@@ -58,8 +58,8 @@ Even if you aren't using the app, you can see the color code or the reminder tim
 
 ```markdown
 ---
-color: 4294113154
-reminder: 1707563200000
+color: #FFFFF475
+reminder: 2026-02-15 09:00
 ---
 # Your Note Title
 Your content here...
