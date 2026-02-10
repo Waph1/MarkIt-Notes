@@ -29,9 +29,12 @@ MarkIt differs from other note apps by treating your notes as **real files**. Th
 *   **Intelligent Search**: Powerful search with "Search everywhere" fallback. If no results are found in your current view, MarkIt automatically searches through all active and archived notes.
 *   **Advanced Sorting**: Sort notes by Date Modified, Created, or Title.
 
-## How it works: Folder Structure
+## How it works: Total Portability
 
-MarkIt stores your notes in a transparent directory structure. Each **Label** is a folder at the root of your selected directory.
+MarkIt is designed with a **"Files First" philosophy**. Unlike most note apps that lock your data into a database, MarkIt uses your filesystem as the database. This ensures that your notes are manageable and readable anywhere, on any device, with any text editor, without losing any features or information.
+
+### Transparent Folder Structure
+Each **Label** is simply a folder. Moving a file between folders on your computer is the same as changing its label in the app.
 
 ```text
 NotesRoot/
@@ -48,8 +51,10 @@ NotesRoot/
         └── Junk.md
 ```
 
-### Note Files (.md)
-Each note is a plain text file. Metadata (like color and reminders) is stored at the top of the file using **YAML Front Matter**, ensuring that even if you open the file in another editor, the information remains readable and portable.
+### Human-Readable Metadata
+Note-specific features (like background colors or reminders) are stored directly inside the `.md` file using **YAML Front Matter**. This is a industry-standard, human-readable format. 
+
+Even if you aren't using the app, you can see the color code or the reminder timestamp at a glance. You can even edit these values manually in a text editor, and MarkIt will reflect those changes.
 
 ```markdown
 ---
@@ -59,6 +64,8 @@ reminder: 1707563200000
 # Your Note Title
 Your content here...
 ```
+
+This approach guarantees **no information loss** and **no vendor lock-in**. Your knowledge base is truly yours, forever.
 
 ## Installation
 
