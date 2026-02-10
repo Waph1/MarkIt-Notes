@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-02-10
+### Added
+- **Reminders**: 
+    - Set date and time alerts for your notes.
+    - Full system notification integration to keep you on track.
+    - New dedicated "Reminders" screen to view all upcoming alerts.
+- **Multi-Selection & Bulk Actions**:
+    - Long-press any note to enter selection mode.
+    - Perform actions on multiple notes at once: Delete, Archive, Restore, Move, Pin, and Change Color.
+    - Set or remove reminders for multiple notes simultaneously.
+- **Navigation Drawer**:
+    - Implemented a standard Material 3 side drawer for quick navigation.
+    - Easy access to "Notes", "Reminders", "Archive", "Trash", and your custom Labels.
+- **Enhanced UX**:
+    - Smooth animated transitions for the selection top bar.
+    - Double-tap back button to exit the app to prevent accidental closes.
+    - Added a refresh indicator when syncing files.
+- **Color Picker**: New visual color picker in the editor and bulk selection for easier note categorization.
+
 ## [0.4.0] - 2026-02-08
 ### Added
 - **Search Everywhere**: 

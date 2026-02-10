@@ -1,4 +1,4 @@
-# MarkIt (v0.4.0)
+# MarkIt (v0.5.0)
 
 **MarkIt** is a modern, beautiful, and privacy-focused Markdown note-taking app for Android. Designed with a clean Google Keep-inspired aesthetic, it puts your content first while giving you the power of Markdown formatting.
 
@@ -11,9 +11,12 @@ MarkIt differs from other note apps by treating your notes as **real files**. Th
 
 *   **File-Based Storage**: Your notes are yours. Stored as local `.md` files.
 *   **Markdown Support**: Full Markdown rendering and editing (Bold, Italic, Lists, Checkbox, etc.).
+*   **Reminders**: Set date and time alerts for your notes with system notifications.
+*   **Multi-Selection**: Bulk actions for deleting, archiving, moving, pinning, and coloring multiple notes.
 *   **Grid Layout**: A beautiful staggered grid view (like Google Keep) or a single-column list view.
 *   **Localization**: Support for English and Italian. Defaults to English.
 *   **Organization**:
+    *   **Navigation Drawer**: Quick access to all your notes, reminders, and labels.
     *   **Folders as Labels**: Use folders to organize notes into categories.
     *   **Pins**: Keep important notes at the top.
     *   **Colors**: Color-code your notes for visual grouping.
@@ -22,7 +25,7 @@ MarkIt differs from other note apps by treating your notes as **real files**. Th
     *   **Empty Trash**: Permanently clear your trash with a single tap.
 *   **Privacy First**: No internet permissions required. No tracking. No cloud lock-in.
 *   **Modern UI**: Built with Jetpack Compose and Material 3, featuring Dark Mode support.
-*   **Smooth UX**: Splash screen matching theme, instant Dark Mode rendering, and fluid screen transitions.
+*   **Smooth UX**: Splash screen matching theme, instant Dark Mode rendering, fluid screen transitions, and double-back to exit.
 *   **Intelligent Search**: Powerful search with "Search everywhere" fallback. If no results are found in your current view, MarkIt automatically searches through all active and archived notes.
 *   **Advanced Sorting**: Sort notes by Date Modified, Created, or Title.
 
