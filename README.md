@@ -29,6 +29,37 @@ MarkIt differs from other note apps by treating your notes as **real files**. Th
 *   **Intelligent Search**: Powerful search with "Search everywhere" fallback. If no results are found in your current view, MarkIt automatically searches through all active and archived notes.
 *   **Advanced Sorting**: Sort notes by Date Modified, Created, or Title.
 
+## How it works: Folder Structure
+
+MarkIt stores your notes in a transparent directory structure. Each **Label** is a folder at the root of your selected directory.
+
+```text
+NotesRoot/
+├── Inbox/              <-- Default folder for new notes
+├── Work/               <-- A custom Label
+│   ├── Pinned/         <-- Notes pinned within this label
+│   │   └── Project.md
+│   └── Meeting.md
+├── .Archive/           <-- Hidden folder for archived notes
+│   └── Work/
+│       └── OldTask.md
+└── .Deleted/           <-- Hidden folder for the Trash
+    └── Inbox/
+        └── Junk.md
+```
+
+### Note Files (.md)
+Each note is a plain text file. Metadata (like color and reminders) is stored at the top of the file using **YAML Front Matter**, ensuring that even if you open the file in another editor, the information remains readable and portable.
+
+```markdown
+---
+color: 4294113154
+reminder: 1707563200000
+---
+# Your Note Title
+Your content here...
+```
+
 ## Installation
 
 1.  Download the latest APK from the [Releases](https://github.com/Waph1/MarkIt/releases) page.
