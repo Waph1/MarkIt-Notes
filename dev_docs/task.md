@@ -1,6 +1,6 @@
 # Task: Plan and Initialize "Keep-style" Markdown App
 
-- [ ] Requirements Analysis & Architecture Design <!-- id: 0 -->
+- [x] Requirements Analysis & Architecture Design <!-- id: 0 -->
     - [x] Define data model (File = Note, Folder = Label) <!-- id: 1 -->
     - [x] Design "Inbox" routing logic <!-- id: 2 -->
     - [x] Design metadata strategy (Where to store color? Config file? Frontmatter?) <!-- id: 3 -->
@@ -29,7 +29,7 @@
     - [x] Logic: Implement "Archive" (Move to `Archive/Label/`) <!-- id: 27 -->
 - [x] UI Expansion <!-- id: 28 -->
     - [x] Feature: Side Navigation Drawer (Inbox, Archive, Trash, Labels) <!-- id: 29 -->
-    - [ ] Bug Investigation & Fixes (v2) <!-- id: 31 -->
+    - [x] Bug Investigation & Fixes (v2) <!-- id: 31 -->
     - [x] Fix: Startup "Select Folder" screen appearing unnecessarily <!-- id: 32 -->
     - [x] Fix: Labels missing in Side Menu (Folder parsing issue?) <!-- id: 33 -->
     - [x] Feature: Allow creating new Labels/Folders in Editor <!-- id: 34 -->

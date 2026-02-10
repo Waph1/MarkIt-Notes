@@ -18,6 +18,7 @@ data class NoteEntity(
     val content: String,          // Full content
     val lastModifiedMs: Long,     // Timestamp in millis
     val color: Long,
+    val reminder: Long? = null,
     val isPinned: Boolean,
     val isArchived: Boolean,
     val isTrashed: Boolean

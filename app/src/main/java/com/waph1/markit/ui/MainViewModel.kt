@@ -7,6 +7,7 @@ import com.waph1.markit.data.model.Note
 import com.waph1.markit.data.repository.RoomNoteRepository
 import com.waph1.markit.data.repository.MetadataManager
 import com.waph1.markit.data.repository.PrefsManager
+import com.waph1.markit.data.receiver.NotificationScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -23,7 +25,8 @@ import kotlinx.coroutines.Dispatchers
 class MainViewModel(
     private val repository: RoomNoteRepository,
     private val metadataManager: MetadataManager,
-    private val prefsManager: PrefsManager
+    private val prefsManager: PrefsManager,
+    private val notificationScheduler: NotificationScheduler
 ) : ViewModel() {
 
     sealed interface NoteFilter {
@@ -31,6 +34,18 @@ class MainViewModel(
         data class Label(val name: String) : NoteFilter
         object Archive : NoteFilter
         object Trash : NoteFilter
+    }
+
+    sealed interface Screen {
+        object Dashboard : Screen
+        object Reminders : Screen
+    }
+
+    private val _currentScreen = MutableStateFlow<Screen>(Screen.Dashboard)
+    val currentScreen: StateFlow<Screen> = _currentScreen.asStateFlow()
+
+    fun navigateTo(screen: Screen) {
+        _currentScreen.value = screen
     }
 
     private val _currentFilter = MutableStateFlow<NoteFilter>(NoteFilter.All)
@@ -50,8 +65,9 @@ class MainViewModel(
 
     private val _isSearchEverywhere = MutableStateFlow(false)
     val isSearchEverywhere: StateFlow<Boolean> = _isSearchEverywhere.asStateFlow()
+    
+    val allNotes = repository.getAllNotesWithArchive()
 
-    // Notes Flow: Reacts to filter changes and queries appropriate DAO method
     @OptIn(kotlinx.coroutines.FlowPreview::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val notes: StateFlow<List<Note>> = combine(
         _currentFilter.flatMapLatest { filter ->
@@ -69,7 +85,6 @@ class MainViewModel(
             .debounce(300L)
             .distinctUntilChanged()
     ) { notesList, allNotesList, order, direction, query ->
-        // Search Filter
         val currentFilterValue = _currentFilter.value
         val searched = if (query.isBlank()) {
             _isSearchEverywhere.value = false
@@ -81,7 +96,6 @@ class MainViewModel(
             }
             
             if (filteredResults.isEmpty() && currentFilterValue !is NoteFilter.Trash) {
-                // Search everywhere (excluding Trash, but including Archive and all active notes)
                 val globalResults = allNotesList.filter {
                     it.title.lowercase().contains(q) || it.content.lowercase().contains(q)
                 }
@@ -105,16 +119,13 @@ class MainViewModel(
             sorted
         }
         
-        // Pinned notes always on top
         val result = directed.sortedByDescending { it.isPinned }
         _isLoading.value = false
         result
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Temporary labels for immediate UI feedback (since Room doesn't show empty folders)
     private val _tempLabels = MutableStateFlow<Set<String>>(emptySet())
 
-    // Labels from Room DAO combined with temporarily created ones
     val labels: StateFlow<List<String>> = combine(
         repository.getLabels(),
         _tempLabels
@@ -122,18 +133,8 @@ class MainViewModel(
         (dbLabels + tempLabels).distinct().sorted()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     
-    // UI State
-    // Default to TRUE, but check immediately on init
     private val _isPermissionNeeded = MutableStateFlow(prefsManager.getRootUri() == null)
     val isPermissionNeeded: StateFlow<Boolean> = _isPermissionNeeded.asStateFlow()
-
-    init {
-        // Auto-load managed by MainActivity to ensure permissions
-        // val savedUriStr = prefsManager.getRootUri()
-        // if (savedUriStr != null) {
-        //     setRootFolder(Uri.parse(savedUriStr))
-        // }
-    }
 
     private val _currentNote = MutableStateFlow<Note?>(null)
     val currentNote: StateFlow<Note?> = _currentNote.asStateFlow()
@@ -141,8 +142,6 @@ class MainViewModel(
     private val _isEditorOpen = MutableStateFlow(false)
     val isEditorOpen: StateFlow<Boolean> = _isEditorOpen.asStateFlow()
 
-    // isLoading: Room reads are synchronous from cache, so always false after initial sync
-    // Start true to prevent "No Notes" flash
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -151,7 +150,6 @@ class MainViewModel(
             _isLoading.value = true
             repository.setRootFolder(uri.toString())
             _isPermissionNeeded.value = false
-            // Loading will be cleared by flow emission
         }
     }
 
@@ -165,7 +163,7 @@ class MainViewModel(
     }
 
     fun createNote() {
-        _currentNote.value = null // New note
+        _currentNote.value = null 
         _isEditorOpen.value = true
     }
 
@@ -206,20 +204,23 @@ class MainViewModel(
     }
 
     fun deleteNote(note: Note) {
+        notificationScheduler.cancel(note)
         viewModelScope.launch {
-            repository.deleteNote(note.file.name) 
+            // Remove reminder from metadata before moving to trash
+            repository.saveNote(note.copy(reminder = null), note.file)
+            repository.deleteNote(note.file.path) 
         }
     }
     
     fun archiveNote(note: Note) {
          viewModelScope.launch {
-            repository.archiveNote(note.file.name)
+            repository.archiveNote(note.file.path)
         }
     }
 
     fun restoreNote(note: Note) {
         viewModelScope.launch {
-            repository.restoreNote(note.file.name)
+            repository.restoreNote(note.file.path)
         }
     }
 
@@ -228,9 +229,28 @@ class MainViewModel(
             val savedPath = repository.saveNote(note, oldFile)
             if (savedPath.isNotEmpty()) {
                 val updatedFile = java.io.File(savedPath)
-                // Extract new title from filename (in case it was renamed due to conflict)
                 val newTitle = updatedFile.nameWithoutExtension
-                _currentNote.value = note.copy(file = updatedFile, title = newTitle)
+                val finalNote = note.copy(file = updatedFile, title = newTitle)
+                
+                // Update current note flow if we are editing this note or it's a new note and editor is open
+                val current = _currentNote.value
+                val editorOpen = _isEditorOpen.value
+                if (current != null && current.file.path == oldFile?.path) {
+                    _currentNote.value = finalNote
+                } else if (current == null && oldFile == null && editorOpen) {
+                    _currentNote.value = finalNote
+                }
+                
+                if (finalNote.reminder != null) {
+                    notificationScheduler.schedule(finalNote)
+                } else {
+                    notificationScheduler.cancel(finalNote)
+                }
+                
+                if (oldFile != null && oldFile.path != updatedFile.path) {
+                     val oldNote = note.copy(file = oldFile)
+                     notificationScheduler.cancel(oldNote)
+                }
             }
         }
     }
@@ -253,7 +273,7 @@ class MainViewModel(
     fun onSearchQueryChanged(query: String) {
         _searchQuery.value = query
     }
-    // Multi-Selection State
+    
     private val _selectedNotes = MutableStateFlow<Set<String>>(emptySet())
     val selectedNotes: StateFlow<Set<String>> = _selectedNotes.asStateFlow()
 
@@ -272,49 +292,46 @@ class MainViewModel(
     }
 
     fun deleteSelectedNotes() {
-        val selected = _selectedNotes.value.toList()
-        clearSelection() // Clear immediately for responsiveness
+        val selectedIds = _selectedNotes.value.toList()
+        clearSelection()
         viewModelScope.launch {
-            repository.deleteNotes(selected)
+            val allNotesList = allNotes.first()
+            val notesToDelete = allNotesList.filter { selectedIds.contains(it.file.path) }
+            
+            notesToDelete.forEach { note ->
+                notificationScheduler.cancel(note)
+                repository.saveNote(note.copy(reminder = null), note.file)
+            }
+            repository.deleteNotes(selectedIds)
         }
     }
 
     fun archiveSelectedNotes() {
-        val selected = _selectedNotes.value.toList()
-        clearSelection() // Clear immediately
+        val selectedIds = _selectedNotes.value.toList()
+        clearSelection() 
         viewModelScope.launch {
-            repository.archiveNotes(selected)
+            repository.archiveNotes(selectedIds)
         }
     }
 
     fun restoreSelectedNotes() {
-        val selected = _selectedNotes.value.toList()
+        val selectedIds = _selectedNotes.value.toList()
         clearSelection()
         viewModelScope.launch {
-            // Restore doesn't have a bulk op yet in generic interface?
-            // FileNoteRepository has restoreNote(id).
-            // Let's implement bulk restore or loop.
-            // Loop for now is fine as restore is rarer, OR valid bulk op.
-            // Check Repository.
-            // Repository interface: restoreNote(id). No restoreNotes.
-            // Loop:
-            selected.forEach { repository.restoreNote(it) }
+            selectedIds.forEach { repository.restoreNote(it) }
         }
     }
 
-    // Move Selected
     fun moveSelectedNotes(targetLabel: String) {
         val selectedIds = _selectedNotes.value.toSet() 
-        val currentNotesList = notes.value 
-        // Filter using file.path (ID)
-        val notesToMove = currentNotesList.filter { selectedIds.contains(it.file.path) }
-        
         clearSelection()
         
         viewModelScope.launch {
+            val allNotesList = allNotes.first()
+            val notesToMove = allNotesList.filter { selectedIds.contains(it.file.path) }
+            
             val targetFolder = if (targetLabel.isEmpty()) "Inbox" else targetLabel
             
-            // Track as temp label if not Inbox
             if (targetFolder != "Inbox") {
                  val current = _tempLabels.value.toMutableSet()
                  current.add(targetFolder)
@@ -327,32 +344,43 @@ class MainViewModel(
     
     fun updateSelectedNotesColor(color: Long) {
         val selectedIds = _selectedNotes.value.toList()
-        val currentNotesList = notes.value
-        val notesToUpdate = currentNotesList.filter { selectedIds.contains(it.file.path) }
-        
         clearSelection()
         
         viewModelScope.launch {
+            val allNotesList = allNotes.first()
+            val notesToUpdate = allNotesList.filter { selectedIds.contains(it.file.path) }
+            
             notesToUpdate.forEach { note ->
-                repository.setNoteColor(note.file.path, color) // Pass ID (path)
+                repository.setNoteColor(note.file.path, color)
+            }
+        }
+    }
+
+    fun updateSelectedNotesReminder(timestamp: Long?) {
+        val selectedIds = _selectedNotes.value.toList()
+        clearSelection()
+        
+        viewModelScope.launch {
+            val allNotesList = allNotes.first()
+            val notesToUpdate = allNotesList.filter { selectedIds.contains(it.file.path) }
+            
+            notesToUpdate.forEach { note ->
+                val updatedNote = note.copy(reminder = timestamp)
+                repository.saveNote(updatedNote, note.file)
+                if (timestamp != null) notificationScheduler.schedule(updatedNote) 
+                else notificationScheduler.cancel(updatedNote)
             }
         }
     }
 
     fun togglePinSelectedNotes() {
         val selectedIds = _selectedNotes.value.toList()
-        val currentNotesList = notes.value
-        val notesToUpdate = currentNotesList.filter { selectedIds.contains(it.file.path) }
-        
-        // Logical check: If ANY selected are unpinned, PIN ALL. Else UNPIN ALL.
-        val shouldPin = notesToUpdate.any { !it.isPinned }
-        
         clearSelection()
         
         viewModelScope.launch {
-             // Pass IDs. Repository expects "paths" or "names"? 
-             // FileNoteRepository checks contains(file.path) || contains(file.name).
-             // safest is passing paths.
+             val allNotesList = allNotes.first()
+             val notesToUpdate = allNotesList.filter { selectedIds.contains(it.file.path) }
+             val shouldPin = notesToUpdate.any { !it.isPinned }
              repository.togglePinStatus(selectedIds, shouldPin)
         }
     }

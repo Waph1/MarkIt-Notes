@@ -31,6 +31,8 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,6 +57,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.compositeOver
@@ -65,6 +69,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.navigationBarsPadding
 import com.waph1.markit.data.model.Note
 import java.io.File
 import java.util.Date
@@ -88,11 +93,60 @@ fun EditorScreen(
             ?: initialLabel
         ) 
     }
+    var reminder by remember { mutableStateOf(currentNote?.reminder) }
     
+    // Mode: New notes start in Edit, existing in View
+    var isEditing by remember { mutableStateOf(currentNote == null) }
+
+    val focusRequester = remember { FocusRequester() }
+
     // UI States
     var showLabelMenu by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
+    var showDateTimePicker by remember { mutableStateOf(false) }
     var showCreateLabelDialog by remember { mutableStateOf(false) }
+
+    if (showDateTimePicker) {
+        DateTimePickerDialog(
+            onDismiss = { showDateTimePicker = false },
+            onConfirm = { timestamp ->
+                reminder = timestamp
+                showDateTimePicker = false
+                
+                // Auto-save if not in editing mode
+                if (!isEditing) {
+                    val parentPath = if (folder.isEmpty()) "Inbox" else folder
+                    val fileName = currentNote?.file?.name ?: "note.md"
+                    val fileObj = File(parentPath, fileName)
+                    val note = currentNote?.copy(
+                        reminder = timestamp,
+                        lastModified = Date()
+                    ) ?: Note(
+                        file = fileObj,
+                        title = title.ifEmpty { 
+                            val dateFormat = java.text.SimpleDateFormat("yyyy_MM_dd_HH_mm", java.util.Locale.getDefault())
+                            dateFormat.format(Date())
+                        },
+                        content = content.text,
+                        lastModified = Date(),
+                        color = color,
+                        reminder = timestamp
+                    )
+                    viewModel.saveNote(note, currentNote?.file)
+                }
+            },
+            onRemove = {
+                reminder = null
+                if (!isEditing) {
+                    val currentNoteObj = currentNote
+                    if (currentNoteObj != null) {
+                        viewModel.saveNote(currentNoteObj.copy(reminder = null), currentNoteObj.file)
+                    }
+                }
+            },
+            initialTimestamp = reminder
+        )
+    }
 
     if (showCreateLabelDialog) {
         CreateLabelDialog(
@@ -105,9 +159,6 @@ fun EditorScreen(
         )
     }
     
-    // Mode: New notes start in Edit, existing in View
-    var isEditing by remember { mutableStateOf(currentNote == null) }
-    
     // Long-press menu states
     var showHeadingMenu by remember { mutableStateOf(false) }
     var showMathMenu by remember { mutableStateOf(false) }
@@ -116,9 +167,12 @@ fun EditorScreen(
     LaunchedEffect(currentNote) {
         if (currentNote != null) {
             title = currentNote!!.title
-            content = TextFieldValue(currentNote!!.content)
+            content = TextFieldValue(text = currentNote!!.content)
             color = currentNote!!.color
             folder = currentNote!!.folder.takeIf { it != "Unknown" && it != "Inbox" } ?: ""
+            reminder = currentNote!!.reminder
+        } else if (isEditing) {
+            focusRequester.requestFocus()
         }
     }
     
@@ -137,6 +191,7 @@ fun EditorScreen(
                 content = content.text,
                 lastModified = Date(),
                 color = color,
+                reminder = reminder,
                 isPinned = currentNote?.isPinned ?: false,
                 isArchived = currentNote?.isArchived ?: false,
                 isTrashed = currentNote?.isTrashed ?: false
@@ -148,6 +203,7 @@ fun EditorScreen(
                 title != currentNote?.title || 
                 content.text != currentNote?.content ||
                 color != currentNote?.color ||
+                reminder != currentNote?.reminder ||
                 folder != (currentNote?.folder?.takeIf { it != "Unknown" && it != "Inbox" } ?: "")
             }
             
@@ -211,7 +267,6 @@ fun EditorScreen(
                     }
                 },
                 actions = {
-                    // Label Selector
                     Box {
                         IconButton(onClick = { showLabelMenu = true }) {
                             Icon(Icons.AutoMirrored.Outlined.DriveFileMove, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.label), 
@@ -244,17 +299,22 @@ fun EditorScreen(
                         }
                     }
                     
+                    IconButton(onClick = { showDateTimePicker = true }) {
+                        Icon(
+                            imageVector = if (reminder != null) Icons.Filled.Notifications else Icons.Outlined.Notifications,
+                            contentDescription = "Reminder",
+                            tint = if (reminder != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    
                     if (!isEditing) {
-                        // Edit button
                         IconButton(onClick = { isEditing = true }) {
                             Icon(Icons.Outlined.Edit, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.edit))
                         }
                     }
                     
-                    // Delete/Restore & Archive
                     val currentNoteObj = currentNote
                     if (currentNoteObj != null) {
-                        // Archive/Unarchive (if not Trashed)
                         if (!currentNoteObj.isTrashed) {
                              if (currentNoteObj.isArchived) {
                                  IconButton(onClick = { 
@@ -301,6 +361,7 @@ fun EditorScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(backgroundColor)
+                        .navigationBarsPadding()
                         .imePadding()
                 ) {
                     if (showColorPicker) {
@@ -312,7 +373,6 @@ fun EditorScreen(
                             }
                         )
                     } else {
-                        // Formatting Toolbar
                         LazyRow(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -320,7 +380,6 @@ fun EditorScreen(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Color Picker Button
                             item {
                                 Box(
                                     modifier = Modifier
@@ -331,10 +390,7 @@ fun EditorScreen(
                                         .clickable { showColorPicker = true }
                                 )
                             }
-                            
                             item { Spacer(Modifier.width(8.dp)) }
-                            
-                            // Heading (with long-press menu)
                             item {
                                 Box {
                                     ToolbarIconButton(
@@ -356,38 +412,16 @@ fun EditorScreen(
                                     }
                                 }
                             }
-                            
-                            // Separator
                             item { ToolbarIconButton(text = "—", onClick = { insertAtCursor("---\n") }) }
-                            
-                            // Vertical Divider
                             item { VerticalDivider(Modifier.height(24.dp)) }
-                            
-                            // Bold
                             item { ToolbarIconButton(text = "B", bold = true, onClick = { insertAtCursor("**", "**") }) }
-                            
-                            // Italic
                             item { ToolbarIconButton(text = "I", italic = true, onClick = { insertAtCursor("_", "_") }) }
-                            
-                            // Underline
                             item { ToolbarIconButton(text = "U", underline = true, onClick = { insertAtCursor("<u>", "</u>") }) }
-                            
-                            // Strikethrough
                             item { ToolbarIconButton(text = "S", strikethrough = true, onClick = { insertAtCursor("~~", "~~") }) }
-                            
-                            // Vertical Divider
                             item { VerticalDivider(Modifier.height(24.dp)) }
-                            
-                            // URL
                             item { ToolbarIconButton(text = "🔗", onClick = { insertAtCursor("[", "](url)") }) }
-                            
-                            // Inline Code
                             item { ToolbarIconButton(text = "<>", onClick = { insertAtCursor("`", "`") }) }
-                            
-                            // Quote
                             item { ToolbarIconButton(text = "\"", onClick = { insertAtCursor("> ") }) }
-                            
-                            // Math (with long-press menu)
                             item {
                                 Box {
                                     ToolbarIconButton(
@@ -410,14 +444,8 @@ fun EditorScreen(
                                     }
                                 }
                             }
-                            
-                            // Bullet List
                             item { ToolbarIconButton(text = "•", onClick = { insertAtCursor("- ") }) }
-                            
-                            // Numbered List
                             item { ToolbarIconButton(text = "1.", onClick = { insertAtCursor("1. ") }) }
-                            
-                            // Checkbox
                             item { ToolbarIconButton(text = "☐", onClick = { insertAtCursor("- [ ] ") }) }
                         }
                     }
@@ -433,7 +461,6 @@ fun EditorScreen(
                 .padding(16.dp)
         ) {
             if (isEditing) {
-                // EDIT MODE: Plain text
                 TextField(
                     value = title,
                     onValueChange = { title = it },
@@ -457,7 +484,8 @@ fun EditorScreen(
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
+                        .weight(1f)
+                        .focusRequester(focusRequester),
                     decorationBox = { innerTextField ->
                         Box {
                             if (content.text.isEmpty()) {
@@ -472,15 +500,13 @@ fun EditorScreen(
                     }
                 )
             } else {
-                // VIEW MODE: Rendered markdown
                 PreviewWebView(
                     content = "# ${title}\n\n${content.text}",
                     isDark = isDark,
                     onCheckboxToggled = { index, checked ->
                         val newText = toggleTask(content.text, index, checked)
-                        content = TextFieldValue(newText)
+                        content = TextFieldValue(text = newText)
                         
-                        // Auto-save on checkbox toggle
                         val parentPath = if (folder.isEmpty()) "Inbox" else folder
                         val fileName = currentNote?.file?.name ?: ""
                         val fileObj = File(parentPath, fileName)
@@ -573,7 +599,6 @@ fun ColorPicker(
     }
 }
 
-// Helper to toggle checkbox in markdown text
 fun toggleTask(markdown: String, index: Int, checked: Boolean): String {
     val regex = Regex("- \\[[ xX]\\]")
     var matchIndex = 0
@@ -587,7 +612,6 @@ fun toggleTask(markdown: String, index: Int, checked: Boolean): String {
     }
 }
 
-// Extension to escape string for JavaScript double-quoted strings
 fun String.escapeForJs(): String {
     return this
         .replace("\\", "\\\\")
@@ -607,7 +631,7 @@ fun PreviewWebView(
     androidx.compose.ui.viewinterop.AndroidView(
         factory = { context ->
             android.webkit.WebView(context).apply {
-                setBackgroundColor(0) // Transparent
+                setBackgroundColor(0)
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.allowFileAccess = true

@@ -3,6 +3,7 @@
     <string name="search_hint">Search in MarkIt</string>
     <string name="clear_search">Clear Search</string>
     <string name="sort_notes">Sort Notes</string>
+    <string name="date">Date</string>
     <string name="sort_date_modified">Date Modified</string>
     <string name="sort_date_created">Date Created</string>
     <string name="sort_title">Title</string>

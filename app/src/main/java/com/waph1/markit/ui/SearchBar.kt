@@ -119,18 +119,10 @@ fun SearchBar(
                 onDismissRequest = { showSortMenu = false }
             ) {
                 DropdownMenuItem(
-                    text = { Text(stringResource(R.string.sort_date_modified)) },
-                    trailingIcon = { if (sortOrder == PrefsManager.SortOrder.DATE_MODIFIED) Icon(Icons.Default.Check, null) },
+                    text = { Text(stringResource(R.string.date)) },
+                    trailingIcon = { if (sortOrder == PrefsManager.SortOrder.DATE_MODIFIED || sortOrder == PrefsManager.SortOrder.DATE_CREATED) Icon(Icons.Default.Check, null) },
                     onClick = {
                         viewModel.setSortOrder(PrefsManager.SortOrder.DATE_MODIFIED)
-                        showSortMenu = false
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.sort_date_created)) },
-                    trailingIcon = { if (sortOrder == PrefsManager.SortOrder.DATE_CREATED) Icon(Icons.Default.Check, null) },
-                    onClick = {
-                        viewModel.setSortOrder(PrefsManager.SortOrder.DATE_CREATED)
                         showSortMenu = false
                     }
                 )

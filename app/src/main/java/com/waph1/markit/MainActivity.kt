@@ -1,22 +1,23 @@
 package com.waph1.markit
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -28,16 +29,19 @@ import com.waph1.markit.ui.EditorScreen
 import com.waph1.markit.ui.MainViewModel
 import com.waph1.markit.ui.theme.KeepNotesTheme
 
+import com.waph1.markit.data.receiver.NotificationScheduler
+
 class MainActivity : ComponentActivity() {
 
     private lateinit var repository: RoomNoteRepository
     private lateinit var metadataManager: MetadataManager
     private lateinit var prefsManager: PrefsManager
+    private lateinit var notificationScheduler: NotificationScheduler
 
     private val viewModel by viewModels<MainViewModel> {
         object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return MainViewModel(repository, metadataManager, prefsManager) as T
+                return MainViewModel(repository, metadataManager, prefsManager, notificationScheduler) as T
             }
         }
     }
@@ -50,6 +54,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val requestNotificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        // Permission granted or denied.
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -57,13 +67,28 @@ class MainActivity : ComponentActivity() {
         metadataManager = MetadataManager(applicationContext)
         repository = RoomNoteRepository(applicationContext, metadataManager)
         prefsManager = PrefsManager(applicationContext)
+        notificationScheduler = NotificationScheduler(applicationContext)
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            requestNotificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
         
-        // Auto-load if persisted
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            val alarmManager = getSystemService(android.app.AlarmManager::class.java)
+            if (!alarmManager.canScheduleExactAlarms()) {
+                val intent = Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+                startActivity(intent)
+            }
+        }
+        
+        handleIntent(intent)
+        
         // Auto-load if persisted
         val savedUriStr = prefsManager.getRootUri()
         if (savedUriStr != null) {
             val uri = android.net.Uri.parse(savedUriStr)
-            // Check if we still have permission
             val hasPermission = contentResolver.persistedUriPermissions.any { 
                 it.uri == uri && (it.isReadPermission || it.isWritePermission) 
             }
@@ -81,33 +106,132 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val isEditorOpen by viewModel.isEditorOpen.collectAsState()
+                    val currentScreen by viewModel.currentScreen.collectAsState()
+                    val currentFilter by viewModel.currentFilter.collectAsState()
+                    val labels by viewModel.labels.collectAsState()
                     val listState = rememberLazyStaggeredGridState()
-                    
-                    androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
-                        DashboardScreen(
-                            viewModel = viewModel,
-                            listState = listState,
-                            onSelectFolder = { openDocumentTreeLauncher.launch(null) },
-                            onNoteClick = { note -> viewModel.openNote(note) },
-                            onFabClick = { viewModel.createNote() }
-                        )
 
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = isEditorOpen,
-                            enter = slideInHorizontally { width -> width },
-                            exit = slideOutHorizontally { width -> width },
-                            label = "EditorTransition"
-                        ) {
-                            val filter = viewModel.currentFilter.value
-                            val label = if (filter is MainViewModel.NoteFilter.Label) filter.name else ""
-                            
-                            EditorScreen(
-                                viewModel = viewModel,
-                                onBack = { viewModel.closeEditor() },
-                                initialLabel = label
+                    // Drawer State
+                    val drawerState = androidx.compose.material3.rememberDrawerState(androidx.compose.material3.DrawerValue.Closed)
+                    val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+                    // Dialog States
+                    var showCreateLabelDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+                    var labelToDelete by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+                    val context = androidx.compose.ui.platform.LocalContext.current
+
+                    if (showCreateLabelDialog) {
+                        com.waph1.markit.ui.CreateLabelDialog(
+                            onDismiss = { showCreateLabelDialog = false },
+                            onConfirm = { name ->
+                                viewModel.createLabel(name)
+                                showCreateLabelDialog = false
+                            }
+                        )
+                    }
+
+                    if (labelToDelete != null) {
+                         androidx.compose.material3.AlertDialog(
+                            onDismissRequest = { labelToDelete = null },
+                            title = { androidx.compose.material3.Text("Delete Label") },
+                            text = { androidx.compose.material3.Text("Are you sure you want to delete label '$labelToDelete'? Notes will not be deleted.") },
+                            confirmButton = {
+                                androidx.compose.material3.TextButton(
+                                    onClick = {
+                                        val name = labelToDelete!!
+                                        viewModel.deleteLabel(
+                                            name = name,
+                                            onSuccess = { 
+                                                android.widget.Toast.makeText(context, "Label deleted", android.widget.Toast.LENGTH_SHORT).show()
+                                            },
+                                            onError = { error ->
+                                                android.widget.Toast.makeText(context, error, android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        )
+                                        labelToDelete = null
+                                    }
+                                ) {
+                                    androidx.compose.material3.Text("Delete")
+                                }
+                            },
+                            dismissButton = {
+                                androidx.compose.material3.TextButton(onClick = { labelToDelete = null }) {
+                                    androidx.compose.material3.Text("Cancel")
+                                }
+                            }
+                        )
+                    }
+
+                    androidx.compose.material3.ModalNavigationDrawer(
+                        drawerState = drawerState,
+                        drawerContent = {
+                            com.waph1.markit.ui.AppDrawerContent(
+                                currentScreen = currentScreen,
+                                currentFilter = currentFilter,
+                                labels = labels,
+                                onScreenSelect = { viewModel.navigateTo(it) },
+                                onFilterSelect = { viewModel.setFilter(it) },
+                                onCreateLabel = { showCreateLabelDialog = true },
+                                onDeleteLabel = { labelToDelete = it },
+                                closeDrawer = { scope.launch { drawerState.close() } }
                             )
                         }
+                    ) {
+                         androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
+                             when (currentScreen) {
+                                 MainViewModel.Screen.Dashboard -> {
+                                     DashboardScreen(
+                                         viewModel = viewModel,
+                                         listState = listState,
+                                         onSelectFolder = { openDocumentTreeLauncher.launch(null) },
+                                         onNoteClick = { note -> viewModel.openNote(note) },
+                                         onFabClick = { viewModel.createNote() },
+                                         onOpenDrawer = { scope.launch { drawerState.open() } }
+                                     )
+                                 }
+                                 MainViewModel.Screen.Reminders -> {
+                                     com.waph1.markit.ui.RemindersScreen(
+                                         viewModel = viewModel,
+                                         onOpenDrawer = { scope.launch { drawerState.open() } },
+                                         onNoteClick = { note -> viewModel.openNote(note) }
+                                     )
+                                 }
+                             }
+
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = isEditorOpen,
+                                enter = slideInHorizontally { width -> width },
+                                exit = slideOutHorizontally { width -> width },
+                                label = "EditorTransition"
+                            ) {
+                                val filter = viewModel.currentFilter.value
+                                val label = if (filter is MainViewModel.NoteFilter.Label) filter.name else ""
+                                
+                                EditorScreen(
+                                    viewModel = viewModel,
+                                    onBack = { viewModel.closeEditor() },
+                                    initialLabel = label
+                                )
+                            }
+                        }
                     }
+                }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent) {
+        intent.getStringExtra("note_id")?.let { noteId ->
+            lifecycleScope.launch {
+                val note = repository.getNote(noteId)
+                if (note != null) {
+                    viewModel.openNote(note)
                 }
             }
         }

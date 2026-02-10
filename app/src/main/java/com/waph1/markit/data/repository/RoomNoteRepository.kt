@@ -17,15 +17,8 @@ import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.OutputStreamWriter
 import java.util.Date
-
 import androidx.room.withTransaction
 
-/**
- * Repository that bridges Room (fast UI) and the File System (source of truth).
- * 
- * Read Path: UI observes Room via Flow.
- * Write Path: Changes go to Disk first, then sync to Room.
- */
 class RoomNoteRepository(
     private val context: Context,
     private val metadataManager: MetadataManager
@@ -36,9 +29,85 @@ class RoomNoteRepository(
     private var rootDir: DocumentFile? = null
     private var appConfig = AppConfig()
     
-    // Content Cache: URI -> Pair(LastModified, Content)
     private val contentCache = mutableMapOf<String, Pair<Long, String>>()
-    
+
+    private data class FrontMatterData(val color: Long, val reminder: Long?, val cleanContent: String)
+
+    private fun parseFrontMatter(rawContent: String): FrontMatterData {
+        val lines = rawContent.lines()
+        if (lines.size < 3 || lines[0].trim() != "---") {
+            return FrontMatterData(0xFFFFFFFF, null, rawContent)
+        }
+        
+        val closingIndexInDropped = lines.drop(1).indexOfFirst { it.trim() == "---" }
+        if (closingIndexInDropped == -1) {
+            return FrontMatterData(0xFFFFFFFF, null, rawContent)
+        }
+        
+        val actualClosingIndex = closingIndexInDropped + 1
+        val yamlLines = lines.subList(1, actualClosingIndex)
+        
+        var contentStartIndex = actualClosingIndex + 1
+        while (contentStartIndex < lines.size && lines[contentStartIndex].isBlank()) {
+            contentStartIndex++
+        }
+        
+        val cleanContent = if (contentStartIndex < lines.size) {
+            lines.subList(contentStartIndex, lines.size).joinToString("\n")
+        } else {
+            ""
+        }
+        
+        var color = 0xFFFFFFFF
+        var reminder: Long? = null
+        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+        
+        yamlLines.forEach { line ->
+            val parts = line.split(":", limit = 2)
+            if (parts.size == 2) {
+                val key = parts[0].trim()
+                val value = parts[1].trim()
+                when (key) {
+                    "color" -> {
+                        try {
+                            if (value.startsWith("#")) {
+                                val hex = value.substring(1)
+                                color = java.lang.Long.parseUnsignedLong(hex, 16)
+                                if (hex.length == 6) color = color or 0xFF000000
+                            } else {
+                                color = value.toLong()
+                            }
+                        } catch (e: Exception) {}
+                    }
+                    "reminder" -> {
+                        try {
+                            reminder = dateFormat.parse(value)?.time
+                        } catch (e: Exception) {
+                            reminder = value.toLongOrNull()
+                        }
+                    }
+                }
+            }
+        }
+        
+        return FrontMatterData(color, reminder, cleanContent)
+    }
+
+    private fun constructFileContent(note: Note): String {
+        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+        return buildString {
+            append("---\n")
+            append(String.format("color: #%08X\n", note.color))
+            note.reminder?.let {
+                append("reminder: ")
+                append(dateFormat.format(Date(it)))
+                append("\n")
+            }
+            append("---\n\n")
+            append(note.content)
+        }
+    }
+
     override suspend fun setRootFolder(uriString: String) {
         val uri = Uri.parse(uriString)
         rootDir = DocumentFile.fromTreeUri(context, uri)
@@ -80,7 +149,7 @@ class RoomNoteRepository(
         }
     }
     
-    override fun getLabels(): Flow<List<String>> = labelDao.getAllLabels()
+    override fun getLabels(): Flow<List<String>> = labelDao.getAllLabels() 
     
     override suspend fun createLabel(name: String): Boolean = withContext(Dispatchers.IO) {
         val root = rootDir ?: return@withContext false
@@ -88,7 +157,6 @@ class RoomNoteRepository(
         
         val existing = root.findFile(name)
         if (existing != null && existing.isDirectory) {
-             // Ensure it's in DB even if exists on disk (e.g. after clear)
              labelDao.insert(LabelEntity(name))
              return@withContext true
         }
@@ -103,19 +171,14 @@ class RoomNoteRepository(
 
     override suspend fun deleteLabel(name: String): Boolean = withContext(Dispatchers.IO) {
         val root = rootDir ?: return@withContext false
-        
-        // 1. Check if empty in DB
         val count = noteDao.countNotesInFolder(name)
         if (count > 0) return@withContext false
         
-        // 2. Delete from disk (Active, Archive, Deleted subfolders)
         root.findFile(name)?.delete()
         root.findFile(".Archive")?.findFile(name)?.delete()
         root.findFile(".Deleted")?.findFile(name)?.delete()
         
-        // 3. Delete from DB
         labelDao.delete(name)
-        
         return@withContext true
     }
     
@@ -125,36 +188,33 @@ class RoomNoteRepository(
     
     override suspend fun saveNote(note: Note, oldFile: java.io.File?): String = withContext(Dispatchers.IO) {
         val root = rootDir ?: return@withContext ""
+        val folderName = if (note.folder.isNullOrEmpty() || note.folder == "Unknown") "Inbox" else note.folder
         
-        val targetFolderName = if (note.folder.isNullOrEmpty() || note.folder == "Unknown") "Inbox" else note.folder
+        // Determine the actual root for searching/saving based on status
+        val effectiveRoot = when {
+            note.isTrashed -> root.findFile(".Deleted") ?: root.createDirectory(".Deleted")
+            note.isArchived -> root.findFile(".Archive") ?: root.createDirectory(".Archive")
+            else -> root
+        } ?: root
+
+        var targetDir = effectiveRoot.findFile(folderName) ?: effectiveRoot.createDirectory(folderName) ?: return@withContext ""
         
-        // --- Unique Filename Logic ---
-        var baseTitle = note.title.trim()
-        if (baseTitle.isEmpty()) baseTitle = "Untitled"
-        // Sanitize title for filename? (Already assumed mostly safe, but good to be careful. Repository assumes valid title from UI?)
-        
+        if (note.isPinned && !note.isArchived && !note.isTrashed) {
+            targetDir = targetDir.findFile("Pinned") ?: targetDir.createDirectory("Pinned") ?: targetDir
+        }
+
+        var baseTitle = note.title.trim().ifEmpty { "Untitled" }
         var finalFileName = "$baseTitle.md"
-        val targetFolderDoc = root.findFile(targetFolderName) ?: root.createDirectory(targetFolderName) ?: return@withContext ""
-        
-        // If we are just saving the SAME file (no rename), allow overwrite.
-        // If oldFile is present and has same name and is in same folder, it's an overwrite.
-        // logic: check if target exists. If it exists and is NOT our oldFile, we conflict.
         
         var conflict = false
-        var targetFileDoc = targetFolderDoc.findFile(finalFileName)
+        var targetFileDoc = targetDir.findFile(finalFileName)
         
         if (targetFileDoc != null) {
-            // File exists. Is it us?
-            if (oldFile != null && oldFile.name == finalFileName) {
-                // It is us (same name).
-                // Check if we moved folder?
-                // oldFile path logic is a bit loose here passed from UI.
-                // But generally if name matches oldFile.name, we assume it's the intended overwrite.
-                conflict = false
-            } else {
-                // It exists, and it's NOT our old file (either logic says new file, or we renamed to a name that exists).
-                conflict = true
-            }
+             if (oldFile != null && oldFile.name == finalFileName) {
+                 conflict = false
+             } else {
+                 conflict = true
+             }
         }
         
         var counter = 1
@@ -162,57 +222,58 @@ class RoomNoteRepository(
         while (conflict) {
             finalTitle = "$baseTitle ($counter)"
             finalFileName = "$finalTitle.md"
-            targetFileDoc = targetFolderDoc.findFile(finalFileName)
-            if (targetFileDoc == null) {
-                conflict = false
-            } else {
-                // Should also check if THIS collision is somehow our old file?
-                // Unlikely if we are incrementing away from base.
-                counter++
-            }
+            targetFileDoc = targetDir.findFile(finalFileName)
+            if (targetFileDoc == null) conflict = false else counter++
         }
-        // -----------------------------
 
-        val filePath = "$targetFolderName/$finalFileName"
+        val filePath = "$folderName/$finalFileName"
         
-        // Handle rename: delete old file if name changed (AND we didn't just decide effectively to keep it? No, we are making a NEW file effectively if renamed)
-        if (oldFile != null && oldFile.name != finalFileName) {
-            val oldParent = oldFile.parent ?: "Inbox"
-            // Start of fix for phantom files:
-            // If we renamed, the old file was at oldParent/oldFile.name
-            root.findFile(oldParent)?.findFile(oldFile.name)?.delete()
-            noteDao.deleteNoteByPath("$oldParent/${oldFile.name}")
+        if (oldFile != null) {
+             val oldName = oldFile.name
+             val oldParentName = oldFile.parent ?: "Inbox"
+             
+             // Check in all possible locations for the old file
+             val locations = listOf(root, root.findFile(".Archive"), root.findFile(".Deleted"))
+             var oldFileDoc: DocumentFile? = null
+             for (loc in locations) {
+                 if (loc == null) continue
+                 oldFileDoc = loc.findFile(oldParentName)?.findFile(oldName) ?:
+                              loc.findFile(oldParentName)?.findFile("Pinned")?.findFile(oldName)
+                 if (oldFileDoc != null) break
+             }
+             
+             if (oldFileDoc != null && oldFileDoc.uri != targetFileDoc?.uri) {
+                 if (oldName != finalFileName || oldFileDoc.parentFile?.name != targetDir.name) {
+                     oldFileDoc.delete()
+                     noteDao.deleteNoteByPath("$oldParentName/$oldName")
+                 }
+             }
         }
-        
-        // Write to disk
-        // targetFileDoc might be null if we resolved conflict to a new non-existent file
+
         if (targetFileDoc == null) {
-            targetFileDoc = targetFolderDoc.createFile("text/markdown", finalFileName)
+            targetFileDoc = targetDir.createFile("text/markdown", finalFileName)
         }
+        
+        val fullContent = constructFileContent(note)
         
         targetFileDoc?.let { doc ->
             context.contentResolver.openOutputStream(doc.uri, "wt")?.use { outputStream ->
                 OutputStreamWriter(outputStream).use { writer ->
-                    writer.write(note.content)
+                    writer.write(fullContent)
                 }
             }
         }
         
-        // Update metadata
-        appConfig.fileColors[finalFileName] = note.color
-        if (note.isPinned) appConfig.pinnedFiles.add(finalFileName) else appConfig.pinnedFiles.remove(finalFileName)
-        metadataManager.saveConfig(root, appConfig)
-        
-        // Update Room
         val entity = NoteEntity(
             filePath = filePath,
             fileName = finalFileName,
-            folder = targetFolderName,
+            folder = folderName,
             title = finalTitle,
             contentPreview = note.content.take(200),
             content = note.content,
             lastModifiedMs = System.currentTimeMillis(),
             color = note.color,
+            reminder = note.reminder,
             isPinned = note.isPinned,
             isArchived = note.isArchived,
             isTrashed = note.isTrashed
@@ -250,7 +311,6 @@ class RoomNoteRepository(
         val entity = noteDao.getNoteByPath(id) ?: return@withContext
         val root = rootDir ?: return@withContext
         
-        // Find source (in .Deleted or .Archive)
         val folder = entity.folder
         val fileName = entity.fileName
         
@@ -274,56 +334,80 @@ class RoomNoteRepository(
     }
     
     override suspend fun setNoteColor(id: String, color: Long) = withContext(Dispatchers.IO) {
-        noteDao.updateColor(id, color)
-        val root = rootDir ?: return@withContext
         val entity = noteDao.getNoteByPath(id) ?: return@withContext
-        appConfig.fileColors[entity.fileName] = color
-        metadataManager.saveConfig(root, appConfig)
+        val note = entity.toNote().copy(color = color)
+        saveNote(note, note.file)
     }
     
     override suspend fun togglePinStatus(noteIds: List<String>, isPinned: Boolean) = withContext(Dispatchers.IO) {
+        val root = rootDir ?: return@withContext
+        
         noteIds.forEach { id ->
+            val entity = noteDao.getNoteByPath(id) ?: return@forEach
+            if (entity.isPinned == isPinned) return@forEach
+            
+            val folderName = entity.folder
+            val fileName = entity.fileName
+            
+            var sourceFile = root.findFile(folderName)?.findFile(fileName)
+            if (sourceFile == null) sourceFile = root.findFile(folderName)?.findFile("Pinned")?.findFile(fileName)
+            
+            if (sourceFile != null) {
+                 val targetDirParent = root.findFile(folderName) ?: root.createDirectory(folderName)
+                 val targetDir = if (isPinned) {
+                     targetDirParent?.findFile("Pinned") ?: targetDirParent?.createDirectory("Pinned")
+                 } else {
+                     targetDirParent
+                 }
+                 
+                 if (targetDir != null) {
+                      val content = readText(sourceFile)
+                      val newFile = targetDir.createFile("text/markdown", fileName)
+                      newFile?.let { nf ->
+                          context.contentResolver.openOutputStream(nf.uri)?.use { os ->
+                              OutputStreamWriter(os).use { it.write(content) }
+                          }
+                          sourceFile.delete()
+                      }
+                 }
+            }
+            
             noteDao.updatePinStatus(id, isPinned)
         }
-        val root = rootDir ?: return@withContext
-        noteIds.forEach { id ->
-            val entity = noteDao.getNoteByPath(id)
-            if (entity != null) {
-                if (isPinned) appConfig.pinnedFiles.add(entity.fileName)
-                else appConfig.pinnedFiles.remove(entity.fileName)
-            }
-        }
-        metadataManager.saveConfig(root, appConfig)
     }
     
     override suspend fun moveNotes(notes: List<Note>, targetFolder: String) = withContext(Dispatchers.IO) {
         val root = rootDir ?: return@withContext
         
-        notes.forEach { note ->
-            val fileName = note.file.name
-            val sourceFolder = note.folder
-            val isArchived = note.isArchived
-            val isTrashed = note.isTrashed
+        notes.forEach {
+            val fileName = it.file.name
+            val sourceFolder = it.folder
+            val isArchived = it.isArchived
+            val isTrashed = it.isTrashed
+            val isPinned = it.isPinned
 
-            // Determine Root based on status
             val effectiveRoot = when {
                 isTrashed -> root.findFile(".Deleted")
                 isArchived -> root.findFile(".Archive")
                 else -> root
             }
 
-            // Source File
-            val sourceFile = effectiveRoot?.findFile(sourceFolder)?.findFile(fileName)
+            var sourceFile = effectiveRoot?.findFile(sourceFolder)?.findFile(fileName)
+            if (sourceFile == null && !isTrashed && !isArchived) {
+                 sourceFile = effectiveRoot?.findFile(sourceFolder)?.findFile("Pinned")?.findFile(fileName)
+            }
             
-            // Target Folder logic
-            // Maintain status: If archived, move within .Archive. If active, move within root.
-            val targetRoot = when {
+            var targetRoot = when {
                 isTrashed -> root.findFile(".Deleted")
                 isArchived -> root.findFile(".Archive") ?: root.createDirectory(".Archive")
                 else -> root
             }
             
-            val targetFolderDoc = targetRoot?.findFile(targetFolder) ?: targetRoot?.createDirectory(targetFolder)
+            var targetFolderDoc = targetRoot?.findFile(targetFolder) ?: targetRoot?.createDirectory(targetFolder)
+            
+            if (isPinned && !isTrashed && !isArchived) {
+                targetFolderDoc = targetFolderDoc?.findFile("Pinned") ?: targetFolderDoc?.createDirectory("Pinned")
+            }
 
             if (sourceFile != null && targetFolderDoc != null) {
                 val content = readText(sourceFile)
@@ -335,7 +419,6 @@ class RoomNoteRepository(
                     sourceFile.delete()
                 }
                 
-                // Update Room
                 val oldPath = "$sourceFolder/$fileName"
                 val newPath = "$targetFolder/$fileName"
                 val entity = noteDao.getNoteByPath(oldPath)
@@ -347,50 +430,38 @@ class RoomNoteRepository(
         }
     }
     
-    // --- Sync Logic ---
-    
     private suspend fun syncFilesToDatabase() = withContext(Dispatchers.IO) {
         val root = rootDir ?: return@withContext
         
         try {
             val allEntities = mutableListOf<NoteEntity>()
-            
-            // Ensure Inbox exists
             if (root.findFile("Inbox") == null) root.createDirectory("Inbox")
             
-            // Scan visible folders
             root.listFiles().filter { it.isDirectory && !it.name!!.startsWith(".") }.forEach { folder ->
                 scanFolderToEntities(folder, isArchived = false, isTrashed = false, allEntities)
             }
             
-            // Scan .Archive
             root.findFile(".Archive")?.listFiles()?.filter { it.isDirectory }?.forEach { folder ->
                 scanFolderToEntities(folder, isArchived = true, isTrashed = false, allEntities)
             }
             
-            // Scan .Deleted
             root.findFile(".Deleted")?.listFiles()?.filter { it.isDirectory }?.forEach { folder ->
                 scanFolderToEntities(folder, isArchived = false, isTrashed = true, allEntities)
             }
             
-           // Prepare Labels OUTSIDE transaction (I/O)
             val labels = mutableSetOf<String>()
             root.listFiles().filter { it.isDirectory && !it.name!!.startsWith(".") }.forEach { 
                  it.name?.let { name -> labels.add(name) }
             }
             
-            // Replace all in Room with Transaction to avoid empty state blink
             AppDatabase.getDatabase(context).withTransaction {
                 noteDao.deleteAll()
                 noteDao.insertNotes(allEntities)
-                
-                // Sync Labels
                 labelDao.deleteAll()
                 labels.forEach { labelDao.insert(LabelEntity(it)) }
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            // Log error or set error state
         }
     }
     
@@ -402,28 +473,42 @@ class RoomNoteRepository(
     ) {
         val folderName = folder.name ?: return
         
-        folder.listFiles().filter { it.isFile && (it.name?.endsWith(".md") == true || it.name?.endsWith(".txt") == true) }.forEach { file ->
-            val fileName = file.name ?: return@forEach
-            val content = readText(file)
-            val color = appConfig.fileColors[fileName] ?: 0xFFFFFFFF
-            val isPinned = appConfig.pinnedFiles.contains(fileName)
-            val lastModified = appConfig.customTimestamps[fileName] ?: file.lastModified()
-            
-            output.add(
-                NoteEntity(
-                    filePath = "$folderName/$fileName",
-                    fileName = fileName,
-                    folder = folderName,
-                    title = fileName.substringBeforeLast("."),
-                    contentPreview = content.take(200),
-                    content = content,
-                    lastModifiedMs = lastModified,
-                    color = color,
-                    isPinned = isPinned,
-                    isArchived = isArchived,
-                    isTrashed = isTrashed
+        suspend fun processFiles(dir: DocumentFile, isPinned: Boolean) {
+            dir.listFiles().filter { it.isFile && (it.name?.endsWith(".md") == true || it.name?.endsWith(".txt") == true) }.forEach { file ->
+                val fileName = file.name ?: return@forEach
+                val rawContent = readText(file)
+                val metadata = parseFrontMatter(rawContent)
+                
+                val color = if (metadata.color != 0xFFFFFFFF) metadata.color else appConfig.fileColors[fileName] ?: 0xFFFFFFFF
+                val reminder = metadata.reminder
+                val lastModified = file.lastModified()
+                
+                output.add(
+                    NoteEntity(
+                        filePath = "$folderName/$fileName",
+                        fileName = fileName,
+                        folder = folderName,
+                        title = fileName.substringBeforeLast("."),
+                        contentPreview = metadata.cleanContent.take(200),
+                        content = metadata.cleanContent,
+                        lastModifiedMs = lastModified,
+                        color = color,
+                        reminder = reminder,
+                        isPinned = isPinned,
+                        isArchived = isArchived,
+                        isTrashed = isTrashed
+                    )
                 )
-            )
+            }
+        }
+
+        processFiles(folder, isPinned = false)
+        
+        if (!isArchived && !isTrashed) {
+            val pinnedDir = folder.findFile("Pinned")
+            if (pinnedDir != null) {
+                processFiles(pinnedDir, isPinned = true)
+            }
         }
     }
     
@@ -433,12 +518,10 @@ class RoomNoteRepository(
         val folder = entity.folder
         val fileName = entity.fileName
         
-        // Preserve timestamp
-        appConfig.customTimestamps[fileName] = entity.lastModifiedMs
-        metadataManager.saveConfig(root, appConfig)
-        
-        val sourceFile = root.findFile(folder)?.findFile(fileName)
-            ?: root.findFile(".Archive")?.findFile(folder)?.findFile(fileName)
+        var sourceFile = root.findFile(folder)?.findFile(fileName) ?:
+                         root.findFile(folder)?.findFile("Pinned")?.findFile(fileName) ?:
+                         root.findFile(".Archive")?.findFile(folder)?.findFile(fileName) ?:
+                         root.findFile(".Deleted")?.findFile(folder)?.findFile(fileName)
         
         if (sourceFile != null) {
             val sysRoot = root.findFile(systemFolderName) ?: root.createDirectory(systemFolderName)
@@ -488,8 +571,6 @@ class RoomNoteRepository(
         noteDao.deleteAllTrashed()
     }
     
-    // --- Converters ---
-    
     private fun NoteEntity.toNote(): Note {
         return Note(
             file = java.io.File(folder, fileName),
@@ -497,6 +578,7 @@ class RoomNoteRepository(
             content = content,
             lastModified = Date(lastModifiedMs),
             color = color,
+            reminder = reminder,
             isPinned = isPinned,
             isArchived = isArchived,
             isTrashed = isTrashed

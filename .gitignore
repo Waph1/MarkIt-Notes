@@ -13,3 +13,4 @@ local.properties
 *.output
 app/build/
 .gradle/
+.github_creds/

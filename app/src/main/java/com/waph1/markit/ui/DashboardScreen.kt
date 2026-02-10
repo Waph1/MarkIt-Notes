@@ -3,10 +3,12 @@ package com.waph1.markit.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,20 +23,13 @@ import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Warning // Placeholder
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material3.Button
@@ -44,10 +39,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -57,7 +49,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -65,21 +56,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.compositeOver
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import com.waph1.markit.data.model.Note
 import com.waph1.markit.data.repository.PrefsManager
-import kotlinx.coroutines.launch
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -99,7 +81,8 @@ fun DashboardScreen(
     listState: LazyStaggeredGridState,
     onSelectFolder: () -> Unit,
     onNoteClick: (Note) -> Unit,
-    onFabClick: () -> Unit
+    onFabClick: () -> Unit,
+    onOpenDrawer: () -> Unit
 ) {
     val notes by viewModel.notes.collectAsState()
     val labels by viewModel.labels.collectAsState()
@@ -111,7 +94,7 @@ fun DashboardScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val context = LocalContext.current
     
-    // ... (UI State remains the same)
+    // UI State
     var showCreateLabelDialog by remember { mutableStateOf(false) }
     var showEmptyTrashDialog by remember { mutableStateOf(false) }
     var labelToDelete by remember { mutableStateOf<String?>(null) }
@@ -164,7 +147,6 @@ fun DashboardScreen(
                                 Toast.makeText(context, context.getString(com.waph1.markit.R.string.label_deleted_toast), Toast.LENGTH_SHORT).show()
                             },
                             onError = { error ->
-                                // Error is currently a raw string from ViewModel, but should be localized
                                 val localizedError = if (error == "Label must be empty to delete it") {
                                     context.getString(com.waph1.markit.R.string.error_delete_label_not_empty)
                                 } else error
@@ -185,10 +167,6 @@ fun DashboardScreen(
         )
     }
     
-    fun onRequestCreateLabel() {
-        showCreateLabelDialog = true
-    }
-    
     // Selection State
     val selectedNotes by viewModel.selectedNotes.collectAsState()
     val isInSelectionMode = selectedNotes.isNotEmpty()
@@ -197,17 +175,15 @@ fun DashboardScreen(
     val allSelectedArchived = selectedNotesList.isNotEmpty() && selectedNotesList.all { it.isArchived }
     val allSelectedActive = selectedNotesList.isNotEmpty() && selectedNotesList.all { !it.isArchived && !it.isTrashed }
     
-    val drawerState = androidx.compose.material3.rememberDrawerState(androidx.compose.material3.DrawerValue.Closed)
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
-    
+    // Calculate if all selected have reminders
+    val allHaveReminders = selectedNotesList.isNotEmpty() && selectedNotesList.all { it.reminder != null }
+    val selectionInitialReminder = if (allHaveReminders) selectedNotesList.firstOrNull()?.reminder else null
+
     // Double back to exit state
     var lastBackPressTime by remember { mutableStateOf(0L) }
     
     BackHandler {
         when {
-            drawerState.isOpen -> {
-                scope.launch { drawerState.close() }
-            }
             isInSelectionMode -> {
                 viewModel.clearSelection()
             }
@@ -223,264 +199,122 @@ fun DashboardScreen(
         }
     }
     
-    var showSortMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-
-    androidx.compose.material3.ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            androidx.compose.material3.ModalDrawerSheet {
-                Column(modifier = Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
-                    Text(
-                        androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.app_name),
-                        modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.headlineMedium
-                    )
-                    androidx.compose.material3.HorizontalDivider()
-                    
-                    // Notes (All)
-                    androidx.compose.material3.NavigationDrawerItem(
-                        label = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.all_notes)) },
-                        selected = currentFilter is MainViewModel.NoteFilter.All,
-                        onClick = {
-                            viewModel.setFilter(MainViewModel.NoteFilter.All)
-                            scope.launch { drawerState.close() }
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp)
-                    )
-
-                    // Labels
-                    val visibleLabels = labels.filter { it != "Inbox" }
-                    if (visibleLabels.isNotEmpty()) {
-                        Text(
-                            androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.labels),
-                            modifier = Modifier.padding(16.dp),
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                        visibleLabels.forEach { label ->
-                            val haptic = LocalHapticFeedback.current
-                            val isSelected = (currentFilter as? MainViewModel.NoteFilter.Label)?.name == label
-                            
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 12.dp, vertical = 2.dp)
-                                    .fillMaxWidth()
-                                    .height(56.dp)
-                                    .clip(androidx.compose.foundation.shape.CircleShape)
-                                    .background(
-                                        if (isSelected) MaterialTheme.colorScheme.secondaryContainer 
-                                        else androidx.compose.ui.graphics.Color.Transparent
-                                    )
-                                    .combinedClickable(
-                                        onClick = {
-                                            viewModel.setFilter(MainViewModel.NoteFilter.Label(label))
-                                            scope.launch { drawerState.close() }
-                                        },
-                                        onLongClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            labelToDelete = label
-                                        }
-                                    )
-                                    .padding(horizontal = 16.dp),
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer 
-                                            else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+    Scaffold(
+        topBar = {
+            AnimatedVisibility(
+                visible = isInSelectionMode,
+                enter = fadeIn() + slideInVertically { -it },
+                exit = fadeOut() + slideOutVertically { -it }
+            ) {
+                SelectionTopAppBar(
+                    selectionCount = selectedNotes.size,
+                    currentFilter = currentFilter,
+                    allSelectedArchived = allSelectedArchived,
+                    allSelectedActive = allSelectedActive,
+                    onClearSelection = { viewModel.clearSelection() },
+                    onDelete = { viewModel.deleteSelectedNotes() },
+                    onArchive = { viewModel.archiveSelectedNotes() },
+                    onRestore = { viewModel.restoreSelectedNotes() },
+                    onMove = { targetLabel -> viewModel.moveSelectedNotes(targetLabel) },
+                    onColorChange = { color -> viewModel.updateSelectedNotesColor(color) },
+                    onPin = { viewModel.togglePinSelectedNotes() },
+                    onReminderChange = { viewModel.updateSelectedNotesReminder(it) },
+                    availableLabels = labels,
+                    initialReminder = selectionInitialReminder
+                )
+            }
+            AnimatedVisibility(
+                visible = !isInSelectionMode,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                androidx.compose.material3.TopAppBar(
+                    title = {
+                        androidx.compose.material3.Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            tonalElevation = 2.dp
+                        ) {
+                            SearchBar(viewModel = viewModel)
+                        }
+                    },
+                    navigationIcon = {
+                         androidx.compose.material3.IconButton(onClick = onOpenDrawer) {
+                             Icon(Icons.Outlined.Menu, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.menu))
+                         }
+                    },
+                    actions = {
+                        if (currentFilter is MainViewModel.NoteFilter.Trash) {
+                            androidx.compose.material3.IconButton(onClick = { showEmptyTrashDialog = true }) {
+                                Icon(Icons.Outlined.Delete, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.empty_trash_desc))
                             }
                         }
-                    }
-                    
-                    // New Label Button
-                    androidx.compose.material3.NavigationDrawerItem(
-                        label = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.create_new_label)) },
-                        icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                        selected = false,
-                        onClick = {
-                            onRequestCreateLabel()
-                            scope.launch { drawerState.close() }
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp)
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
                     )
-
-                    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    
-                    // Archive
-                    androidx.compose.material3.NavigationDrawerItem(
-                        label = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.archive)) },
-                        selected = currentFilter is MainViewModel.NoteFilter.Archive,
-                        onClick = {
-                            viewModel.setFilter(MainViewModel.NoteFilter.Archive)
-                            scope.launch { drawerState.close() }
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp)
-                    )
-
-                    // Trash
-                    androidx.compose.material3.NavigationDrawerItem(
-                        label = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.trash)) },
-                        selected = currentFilter is MainViewModel.NoteFilter.Trash,
-                        onClick = {
-                            viewModel.setFilter(MainViewModel.NoteFilter.Trash)
-                            scope.launch { drawerState.close() }
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp)
-                    )
+                )
+            }
+        },
+        floatingActionButton = {
+            if (!isPermissionNeeded && currentFilter !is MainViewModel.NoteFilter.Trash && currentFilter !is MainViewModel.NoteFilter.Archive) {
+                FloatingActionButton(onClick = onFabClick) {
+                    Icon(Icons.Default.Add, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.add_note))
                 }
             }
         }
-    ) {
-        val title = when (currentFilter) {
-            is MainViewModel.NoteFilter.All -> androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.app_name)
-            is MainViewModel.NoteFilter.Trash -> androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.trash)
-            is MainViewModel.NoteFilter.Archive -> androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.archive)
-            is MainViewModel.NoteFilter.Label -> (currentFilter as MainViewModel.NoteFilter.Label).name
-        }
-
-        Scaffold(
-            topBar = {
-                AnimatedVisibility(
-                    visible = isInSelectionMode,
-                    enter = fadeIn() + slideInVertically { -it },
-                    exit = fadeOut() + slideOutVertically { -it }
-                ) {
-                    SelectionTopAppBar(
-                        selectionCount = selectedNotes.size,
-                        currentFilter = currentFilter,
-                        allSelectedArchived = allSelectedArchived,
-                        allSelectedActive = allSelectedActive,
-                        onClearSelection = { viewModel.clearSelection() },
-                        onDelete = { viewModel.deleteSelectedNotes() },
-                        onArchive = { viewModel.archiveSelectedNotes() },
-                        onRestore = { viewModel.restoreSelectedNotes() },
-                        onMove = { targetLabel -> viewModel.moveSelectedNotes(targetLabel) },
-                        onColorChange = { color -> viewModel.updateSelectedNotesColor(color) },
-                        onPin = { viewModel.togglePinSelectedNotes() },
-                        availableLabels = labels
-                    )
-                }
-                AnimatedVisibility(
-                    visible = !isInSelectionMode,
-                    enter = fadeIn(),
-                    exit = fadeOut()
-                ) {
-                    androidx.compose.material3.TopAppBar(
-                        title = {
-                            androidx.compose.material3.Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(50.dp),
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                tonalElevation = 2.dp
-                            ) {
-                                SearchBar(viewModel = viewModel)
-                            }
-                        },
-                        navigationIcon = {
-                             androidx.compose.material3.IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                 Icon(Icons.Outlined.Menu, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.menu))
-                             }
-                        },
-                        actions = {
-                            if (currentFilter is MainViewModel.NoteFilter.Trash) {
-                                androidx.compose.material3.IconButton(onClick = { showEmptyTrashDialog = true }) {
-                                    Icon(Icons.Outlined.Delete, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.empty_trash_desc))
-                                }
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        )
-                    )
-                }
-            },
-            floatingActionButton = {
-                if (!isPermissionNeeded && currentFilter !is MainViewModel.NoteFilter.Trash && currentFilter !is MainViewModel.NoteFilter.Archive) {
-                    FloatingActionButton(onClick = onFabClick) {
-                        Icon(Icons.Default.Add, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.add_note))
-                    }
-                }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            if (isLoading && notes.isNotEmpty()) {
+                androidx.compose.material3.LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().height(2.dp),
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
-        ) { paddingValues ->
-            Column(
+            
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
+                    .padding(horizontal = 8.dp)
             ) {
-                if (isLoading && notes.isNotEmpty()) {
-                    androidx.compose.material3.LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth().height(2.dp),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-                
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 8.dp) // Add horizontal padding for grid
-                ) {
-                if (isPermissionNeeded) {
-                    PermissionRequestState(
-                        onSelectFolder = onSelectFolder,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                } else {
-                    NoteGrid(
-                        notes = notes,
-                        selectedNotes = selectedNotes,
-                        isInSelectionMode = isInSelectionMode,
-                        isLoading = isLoading,
-                        isSearchEverywhere = isSearchEverywhere,
-                        searchQuery = searchQuery,
-                        viewMode = viewMode,
-                        currentFilter = currentFilter,
-                        listState = listState,
-                        onNoteClick = { note ->
-                            if (isInSelectionMode) {
-                                viewModel.toggleSelection(note)
-                            } else {
-                                onNoteClick(note)
-                            }
-                        },
-                        onNoteLongClick = { note ->
+            if (isPermissionNeeded) {
+                PermissionRequestState(
+                    onSelectFolder = onSelectFolder,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            } else {
+                NoteGrid(
+                    notes = notes,
+                    selectedNotes = selectedNotes,
+                    isInSelectionMode = isInSelectionMode,
+                    isLoading = isLoading,
+                    isSearchEverywhere = isSearchEverywhere,
+                    searchQuery = searchQuery,
+                    viewMode = viewMode,
+                    currentFilter = currentFilter,
+                    listState = listState,
+                    onNoteClick = { note ->
+                        if (isInSelectionMode) {
                             viewModel.toggleSelection(note)
+                        } else {
+                            onNoteClick(note)
                         }
-                    )
-                }
+                    },
+                    onNoteLongClick = { note ->
+                        viewModel.toggleSelection(note)
+                    }
+                )
             }
         }
     }
 }
-}
-
-
-@Composable
-fun PermissionRequestState(
-    onSelectFolder: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier.padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.welcome_title),
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-        Text(
-            text = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.welcome_message),
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
-        Button(onClick = onSelectFolder) {
-            Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.select_folder))
-        }
-    }
 }
 
 private sealed interface DashboardUiItem {
@@ -511,7 +345,6 @@ fun NoteGrid(
     onNoteLongClick: (Note) -> Unit
 ) {
     if (isLoading && notes.isEmpty()) {
-        // ... (loading state remains the same)
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 androidx.compose.material3.CircularProgressIndicator()
@@ -524,7 +357,6 @@ fun NoteGrid(
             }
         }
     } else if (notes.isEmpty()) {
-        // ... (empty state remains the same)
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
@@ -546,7 +378,6 @@ fun NoteGrid(
         val isTrash = currentFilter is MainViewModel.NoteFilter.Trash
         val isArchive = currentFilter is MainViewModel.NoteFilter.Archive
         
-        // Define string values for remember keys
         val searchEverywhereLabel = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.search_everywhere)
         val searchResultsLabel = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.search_results)
         val pinnedLabel = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.pinned)
@@ -584,7 +415,6 @@ fun NoteGrid(
                     archived.forEach { list.add(DashboardUiItem.NoteItem(it)) }
                  }
             }
-            // Add Spacer at the end
             list.add(DashboardUiItem.SpacerItem)
             list
         }
@@ -648,8 +478,6 @@ fun NoteCard(
     val isDark = androidx.compose.foundation.isSystemInDarkTheme()
     val noteColor = Color(note.color.toInt())
     
-    // In dark mode, we use a much darker version of the pastel color to maintain contrast
-    // or we use the pastel color with low alpha on top of the surface
     val containerColor = if (isDark) {
         if (note.color == 0xFFFFFFFF) MaterialTheme.colorScheme.surfaceVariant
         else noteColor.copy(alpha = 0.3f).compositeOver(MaterialTheme.colorScheme.surface)
@@ -682,13 +510,30 @@ fun NoteCard(
         Column(
             modifier = Modifier.padding(12.dp)
         ) {
-            if (note.title.isNotEmpty()) {
-                Text(
-                    text = note.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                if (note.title.isNotEmpty()) {
+                    Text(
+                        text = note.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f).padding(bottom = 8.dp)
+                    )
+                } else {
+                    Spacer(Modifier.weight(1f))
+                }
+                
+                if (note.reminder != null) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = "Reminder",
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             if (note.folder != "Unknown" && note.folder != "Inbox") {
                  Text(
@@ -707,13 +552,12 @@ fun NoteCard(
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(top = 4.dp)
                     )
-                    // Overlay to capture clicks
                     Box(
                         modifier = Modifier
                             .matchParentSize()
                             .combinedClickable(
                                 interactionSource = interactionSource,
-                                indication = null, // Ripple is handled by the shared interaction source on the Card
+                                indication = null,
                                 onClick = onClick,
                                 onLongClick = onLongClickAction
                             )
@@ -724,6 +568,31 @@ fun NoteCard(
     }
 }
 
+@Composable
+fun PermissionRequestState(
+    onSelectFolder: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.welcome_title),
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+        Text(
+            text = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.welcome_message),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(bottom = 24.dp)
+        )
+        Button(onClick = onSelectFolder) {
+            Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.select_folder))
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -739,25 +608,42 @@ fun SelectionTopAppBar(
     onMove: (String) -> Unit,
     onColorChange: (Long) -> Unit,
     onPin: () -> Unit,
-    availableLabels: List<String>
+    onReminderChange: (Long?) -> Unit,
+    availableLabels: List<String>,
+    initialReminder: Long? = null
 ) {
     var showMoveMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showColorMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showDeleteDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showCreateLabelDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showDateTimePicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     if (showCreateLabelDialog) {
         CreateLabelDialog(
             onDismiss = { showCreateLabelDialog = false },
             onConfirm = { name ->
-                onMove(name) // Creates and moves
+                onMove(name)
                 showCreateLabelDialog = false
             }
         )
     }
+
+    if (showDateTimePicker) {
+        DateTimePickerDialog(
+            onDismiss = { showDateTimePicker = false },
+            onConfirm = { timestamp ->
+                onReminderChange(timestamp)
+                showDateTimePicker = false
+            },
+            onRemove = {
+                onReminderChange(null)
+                showDateTimePicker = false
+            },
+            initialTimestamp = initialReminder
+        )
+    }
     
     val isTrash = currentFilter is MainViewModel.NoteFilter.Trash
-    // isArchive is no longer the sole determinant for Restore visibility
     
     if (showDeleteDialog) {
         androidx.compose.material3.AlertDialog(
@@ -796,15 +682,12 @@ fun SelectionTopAppBar(
             }
         },
         actions = {
-             // Restore / Unarchive
-             // Show if in Trash OR (All Selected are Archived)
              if (isTrash || allSelectedArchived) {
                  androidx.compose.material3.IconButton(onClick = onRestore) {
-                     Icon(Icons.Outlined.Refresh, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.restore)) // Use Refresh or Restore icon
+                     Icon(Icons.Outlined.Refresh, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.restore))
                  }
              }
              
-             // Move (Hidden in Trash)
              if (!isTrash) {
                  androidx.compose.material3.IconButton(onClick = { showMoveMenu = true }) {
                      Icon(Icons.AutoMirrored.Outlined.DriveFileMove, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.move)) 
@@ -841,9 +724,6 @@ fun SelectionTopAppBar(
                  }
              }
 
-             // Color Picker
-             // Allowed for Active and Archived? User said "remove archive or restore option".
-             // We'll allow Color for Archived notes as it's useful.
              if (!isTrash) {
                  Box {
                       androidx.compose.material3.IconButton(onClick = { showColorMenu = true }) {
@@ -883,23 +763,24 @@ fun SelectionTopAppBar(
                  }
              }
              
-             // Pin/Unpin (Hidden in Trash, and only for Active notes?)
-             // Pinning archived notes usually implies unarchiving or just pinning in archive.
-             // We'll restrict to Active notes to keep it simple and consistent.
+             if (!isTrash) {
+                 androidx.compose.material3.IconButton(onClick = { showDateTimePicker = true }) {
+                     Icon(Icons.Outlined.Notifications, contentDescription = "Reminder")
+                 }
+             }
+             
              if (!isTrash && allSelectedActive) {
                  androidx.compose.material3.IconButton(onClick = onPin) {
                      Icon(Icons.Outlined.Star, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.pin_unpin))
                  }
              }
 
-             // Archive (Hidden in Trash, and only for Active notes)
              if (!isTrash && allSelectedActive) {
                  androidx.compose.material3.IconButton(onClick = onArchive) {
                      Icon(Icons.Outlined.Archive, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.archive))
                  }
              }
              
-             // Delete
              androidx.compose.material3.IconButton(onClick = { showDeleteDialog = true }) {
                  Icon(Icons.Outlined.Delete, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.delete))
              }
