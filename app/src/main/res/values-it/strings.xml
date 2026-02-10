@@ -64,6 +64,7 @@
     <string name="edit">Modifica</string>
     <string name="create">Crea</string>
     <string name="close_selection">Chiudi selezione</string>
+    <string name="more_options">Altre opzioni</string>
 
     <!-- Editor -->
     <string name="label_name_hint">Nome etichetta</string>

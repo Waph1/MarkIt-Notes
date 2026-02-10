@@ -12,8 +12,8 @@ android {
         applicationId = "com.waph1.markit"
         minSdk = 24
         targetSdk = 34
-        versionCode = 9
-        versionName = "0.5.0"
+        versionCode = 10
+        versionName = "5.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -36,6 +36,7 @@ android {
     buildFeatures {
         compose = true
     }
+
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"
     }

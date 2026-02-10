@@ -164,6 +164,7 @@ class MainActivity : ComponentActivity() {
 
                     androidx.compose.material3.ModalNavigationDrawer(
                         drawerState = drawerState,
+                        gesturesEnabled = false,
                         drawerContent = {
                             com.waph1.markit.ui.AppDrawerContent(
                                 currentScreen = currentScreen,

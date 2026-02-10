@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -105,6 +106,7 @@ fun EditorScreen(
     var showColorPicker by remember { mutableStateOf(false) }
     var showDateTimePicker by remember { mutableStateOf(false) }
     var showCreateLabelDialog by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
 
     if (showDateTimePicker) {
         DateTimePickerDialog(
@@ -315,37 +317,59 @@ fun EditorScreen(
                     
                     val currentNoteObj = currentNote
                     if (currentNoteObj != null) {
-                        if (!currentNoteObj.isTrashed) {
-                             if (currentNoteObj.isArchived) {
-                                 IconButton(onClick = { 
-                                     viewModel.restoreNote(currentNoteObj)
-                                     onBack()
-                                 }) {
-                                     Icon(Icons.Outlined.Refresh, androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.unarchive))
-                                 }
-                             } else {
-                                 IconButton(onClick = { 
-                                     viewModel.archiveNote(currentNoteObj)
-                                     onBack()
-                                 }) {
-                                     Icon(Icons.Outlined.Archive, androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.archive))
-                                 }
-                             }
-                        }
-
-                        if (currentNoteObj.isTrashed) {
-                            IconButton(onClick = { 
-                                viewModel.restoreNote(currentNoteObj)
-                                onBack() 
-                            }) {
-                                Icon(Icons.Outlined.Refresh, androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.restore))
+                        Box {
+                            IconButton(onClick = { showMoreMenu = true }) {
+                                Icon(Icons.Default.MoreVert, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.more_options))
                             }
-                        } else {
-                            IconButton(onClick = { 
-                                viewModel.deleteNote(currentNoteObj)
-                                onBack()
-                            }) {
-                                Icon(Icons.Outlined.Delete, androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.delete))
+                            DropdownMenu(
+                                expanded = showMoreMenu,
+                                onDismissRequest = { showMoreMenu = false }
+                            ) {
+                                if (!currentNoteObj.isTrashed) {
+                                    if (currentNoteObj.isArchived) {
+                                        DropdownMenuItem(
+                                            text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.unarchive)) },
+                                            leadingIcon = { Icon(Icons.Outlined.Refresh, null) },
+                                            onClick = { 
+                                                viewModel.restoreNote(currentNoteObj)
+                                                showMoreMenu = false
+                                                onBack()
+                                            }
+                                        )
+                                    } else {
+                                        DropdownMenuItem(
+                                            text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.archive)) },
+                                            leadingIcon = { Icon(Icons.Outlined.Archive, null) },
+                                            onClick = { 
+                                                viewModel.archiveNote(currentNoteObj)
+                                                showMoreMenu = false
+                                                onBack()
+                                            }
+                                        )
+                                    }
+                                }
+
+                                if (currentNoteObj.isTrashed) {
+                                    DropdownMenuItem(
+                                        text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.restore)) },
+                                        leadingIcon = { Icon(Icons.Outlined.Refresh, null) },
+                                        onClick = { 
+                                            viewModel.restoreNote(currentNoteObj)
+                                            showMoreMenu = false
+                                            onBack() 
+                                        }
+                                    )
+                                } else {
+                                    DropdownMenuItem(
+                                        text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.delete)) },
+                                        leadingIcon = { Icon(Icons.Outlined.Delete, null) },
+                                        onClick = { 
+                                            viewModel.deleteNote(currentNoteObj)
+                                            showMoreMenu = false
+                                            onBack()
+                                        }
+                                    )
+                                }
                             }
                         }
                     }

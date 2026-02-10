@@ -1,77 +1,13 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
-## [0.5.0] - 2026-02-10
+## [5.0.1] - 2026-02-11
 ### Added
-- **Reminders**: 
-    - Set date and time alerts for your notes.
-    - Full system notification integration to keep you on track.
-    - New dedicated "Reminders" screen to view all upcoming alerts.
-- **Multi-Selection & Bulk Actions**:
-    - Long-press any note to enter selection mode.
-    - Perform actions on multiple notes at once: Delete, Archive, Restore, Move, Pin, and Change Color.
-    - Set or remove reminders for multiple notes simultaneously.
-- **Navigation Drawer**:
-    - Implemented a standard Material 3 side drawer for quick navigation.
-    - Easy access to "Notes", "Reminders", "Archive", "Trash", and your custom Labels.
-- **Enhanced UX**:
-    - Smooth animated transitions for the selection top bar.
-    - Double-tap back button to exit the app to prevent accidental closes.
-    - Added a refresh indicator when syncing files.
-- **Color Picker**: New visual color picker in the editor and bulk selection for easier note categorization.
+- **UI**: Added a 3-dots overflow menu for "Archive" and "Delete" actions in the Dashboard and Editor.
+- **UI**: Added "Empty Trash" action to a 3-dots menu in the Trash view.
+- **Localization**: Added missing strings for "More options" in English and Italian.
 
-## [0.4.0] - 2026-02-08
-### Added
-- **Search Everywhere**: 
-    - Implemented a "Search everywhere" fallback logic: if a search query returns no results in the current filter (Label or All Notes), the app automatically expands the search to include all active and archived notes.
-    - Added a clear "Search everywhere" header in the UI to indicate when results are coming from the broader search.
-    - Added a "Search results" header for standard filtered searches.
-- **Localization**:
-    - Added full support for the **Italian** language.
-    - Externalized all UI strings to `strings.xml` for easier future translations.
-    - The app defaults to English unless the device language is set to Italian.
-- **View Mode**:
-    - Added a button to toggle between **Grid View** (2 columns) and **List View** (1 column).
-    - The user's preference is persisted across app restarts.
-- **Label Management**:
-    - Users can now delete empty labels by long-pressing them in the side navigation drawer.
-    - Added validation to prevent deleting labels that still contain notes (active, archived, or trashed).
-- **Trash Management**:
-    - Added "Empty Trash" feature with a confirmation dialog to permanently delete all notes in the trash.
-- **Editor Enhancements**:
-    - Added Archive and Unarchive buttons directly in the note editor top bar.
-    - New notes created while viewing a label are now automatically assigned to that label.
-- **Visuals & UX**:
-    - Custom splash screen with a centered "MarkIt" logo that respects Day/Night mode.
-    - Improved screen transitions: opening and closing notes is now buttery smooth with an overlay transition that preserves the dashboard state.
-    - Fixed white flashes in Dark Mode by implementing instant theming in the Markdown preview engine.
-
-### Fixed
-- **Scrolling**: Resolved a critical bug where the note grid would jump or "clip back" when scrolling near the bottom of the list.
-- **Archived Note Moving**: Fixed a bug where moving an archived note to a new label would accidentally unarchive it or lose its file reference.
-- **Note Creation**: Fixed an issue where new notes would sometimes default to the "Inbox" even when created within a specific label.
-- **UI Consistency**: Unified icon styles across the app to use "Outlined" variants.
-
-## [0.3.1] - 2026-02-06
 ### Changed
-- **Maintenance**: Updated project dependencies to 2024 standards.
-    - Updated Kotlin to `1.9.22`.
-    - Updated Compose to BOM `2024.02.00` / Compiler `1.5.8`.
-    - Updated AGP to `8.2.2`.
-
-## [0.3.0] - 2026-02-05
-### Added
-- **Search & Filter**: Logic to search notes by title and content with a 300ms debounce for performance.
-- **Sorting**: Sort notes by Title, Date Modified, or Date Created (Ascending/Descending).
-- **New UI Components**:
-    - dedicated `SearchBar` with clear button and sort menu.
-    - Adaptive App Icon (Dark Mode compatible, no white border).
-### Changed
-- **Refactoring**:
-    - Globalized all strings to `strings.xml`.
-    - Cleaned up `DashboardScreen` by extracting components.
-- **Documentation**: Updated README with accurate features and icon.
+- **UX**: Disabled the swipe gesture to open the side navigation drawer to prevent accidental triggers.
 
 ## [0.2.2] - 2026-02-04
 ### Changed

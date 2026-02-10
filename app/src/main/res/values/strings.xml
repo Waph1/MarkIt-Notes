@@ -65,6 +65,7 @@
     <string name="edit">Edit</string>
     <string name="create">Create</string>
     <string name="close_selection">Close Selection</string>
+    <string name="more_options">More options</string>
 
     <!-- Editor -->
     <string name="label_name_hint">Label name</string>

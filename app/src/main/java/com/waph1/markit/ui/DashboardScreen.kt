@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
@@ -248,8 +249,24 @@ fun DashboardScreen(
                     },
                     actions = {
                         if (currentFilter is MainViewModel.NoteFilter.Trash) {
-                            androidx.compose.material3.IconButton(onClick = { showEmptyTrashDialog = true }) {
-                                Icon(Icons.Outlined.Delete, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.empty_trash_desc))
+                            var showMoreMenu by remember { mutableStateOf(false) }
+                            Box {
+                                androidx.compose.material3.IconButton(onClick = { showMoreMenu = true }) {
+                                    Icon(Icons.Default.MoreVert, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.more_options))
+                                }
+                                DropdownMenu(
+                                    expanded = showMoreMenu,
+                                    onDismissRequest = { showMoreMenu = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.empty_trash_desc)) },
+                                        leadingIcon = { Icon(Icons.Outlined.Delete, null) },
+                                        onClick = { 
+                                            showEmptyTrashDialog = true
+                                            showMoreMenu = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     },
@@ -615,6 +632,7 @@ fun SelectionTopAppBar(
     var showMoveMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showColorMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showDeleteDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showMoreMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showCreateLabelDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showDateTimePicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
@@ -775,14 +793,33 @@ fun SelectionTopAppBar(
                  }
              }
 
-             if (!isTrash && allSelectedActive) {
-                 androidx.compose.material3.IconButton(onClick = onArchive) {
-                     Icon(Icons.Outlined.Archive, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.archive))
+             Box {
+                 androidx.compose.material3.IconButton(onClick = { showMoreMenu = true }) {
+                     Icon(Icons.Default.MoreVert, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.more_options))
                  }
-             }
-             
-             androidx.compose.material3.IconButton(onClick = { showDeleteDialog = true }) {
-                 Icon(Icons.Outlined.Delete, contentDescription = androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.delete))
+                 DropdownMenu(
+                     expanded = showMoreMenu,
+                     onDismissRequest = { showMoreMenu = false }
+                 ) {
+                     if (!isTrash && allSelectedActive) {
+                         DropdownMenuItem(
+                             text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.archive)) },
+                             leadingIcon = { Icon(Icons.Outlined.Archive, null) },
+                             onClick = { 
+                                 onArchive()
+                                 showMoreMenu = false
+                             }
+                         )
+                     }
+                     DropdownMenuItem(
+                         text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markit.R.string.delete)) },
+                         leadingIcon = { Icon(Icons.Outlined.Delete, null) },
+                         onClick = { 
+                             showDeleteDialog = true
+                             showMoreMenu = false
+                         }
+                     )
+                 }
              }
         },
         colors = TopAppBarDefaults.topAppBarColors(
