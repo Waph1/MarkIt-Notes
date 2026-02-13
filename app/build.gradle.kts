@@ -5,15 +5,15 @@ plugins {
 }
 
 android {
-    namespace = "com.waph1.markit"
+    namespace = "com.waph1.markitnotes"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.waph1.markit"
+        applicationId = "com.waph1.markitnotes"
         minSdk = 24
         targetSdk = 34
-        versionCode = 9
-        versionName = "0.5.0"
+        versionCode = 12
+        versionName = "5.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -36,6 +36,7 @@ android {
     buildFeatures {
         compose = true
     }
+
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"
     }

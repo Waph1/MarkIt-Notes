@@ -13,5 +13,5 @@ dependencyResolutionManagement {
         maven { url = uri("https://jitpack.io") }
     }
 }
-rootProject.name = "MarkIt"
+rootProject.name = "MarkIt Notes"
 include(":app")

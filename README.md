@@ -1,60 +1,45 @@
-# MarkIt (v0.5.0)
+# MarkIt Notes (v5.2.0)
 
-**MarkIt** is a modern, beautiful, and privacy-focused Markdown note-taking app for Android. Designed with a clean Google Keep-inspired aesthetic, it puts your content first while giving you the power of Markdown formatting.
+**MarkIt Notes** is a modern, beautiful, and privacy-focused Markdown note-taking app for Android. Designed with a clean Google Keep-inspired aesthetic, it puts your content first while giving you the power of Markdown formatting through a revolutionary **Hybrid Editing** experience.
 
-![MarkIt Icon](app/src/main/res/drawable/ic_launcher_foreground.png)
+![MarkIt Notes Icon](app/src/main/res/drawable/ic_launcher_foreground.png)
+
+## The Hybrid Editor Experience
+
+MarkIt Notes features a sophisticated "Live Preview" editor that bridges the gap between raw Markdown and rendered text.
+
+*   **Syntax that Melts Away**: Markdown symbols like `#`, `**`, `_`, and `<u>` are visible and fainter when you are editing them, but disappear the moment you move your cursor away, leaving you with beautifully rendered text (Bold, Italic, Headings, etc.) directly in the editor.
+*   **Smart Newlines**:
+    *   **Syntax Jumps**: Pressing Enter while inside a formatted word (e.g., `**Bold|**`) automatically jumps past the closing syntax before creating the new line, keeping your formatting intact.
+    *   **List & Quote Continuation**: Pressing Enter on a list item (`-`, `1.`, `- [ ]`) or a blockquote (`>`) automatically continues the prefix on the next line.
+    *   **Intelligent Termination**: Pressing Enter twice on an empty list item or quote automatically clears the prefix and ends the block.
+*   **Hypertext Integration**: Rendered links in the preview open directly in your default system browser for a seamless workflow.
 
 ## About
-MarkIt differs from other note apps by treating your notes as **real files**. There is no hidden database; every note is a plain text Markdown (`.md`) file stored in a folder of your choice on your device. This means you truly own your data—you can sync it, back it up, or open it with any other text editor.
+MarkIt Notes differs from other note apps by treating your notes as **real files**. There is no hidden database; every note is a plain text Markdown (`.md`) file stored in a folder of your choice on your device. This means you truly own your data—you can sync it, back it up, or open it with any other text editor.
 
 ## Features
 
 *   **File-Based Storage**: Your notes are yours. Stored as local `.md` files.
-*   **Markdown Support**: Full Markdown rendering and editing (Bold, Italic, Lists, Checkbox, etc.).
+*   **Hybrid Markdown Editor**: Live-rendering while you type with disappearing syntax.
 *   **Reminders**: Set date and time alerts for your notes with system notifications.
 *   **Multi-Selection**: Bulk actions for deleting, archiving, moving, pinning, and coloring multiple notes.
 *   **Grid Layout**: A beautiful staggered grid view (like Google Keep) or a single-column list view.
-*   **Localization**: Support for English and Italian. Defaults to English.
+*   **Localization**: Support for English and Italian.
 *   **Organization**:
-    *   **Navigation Drawer**: Quick access to all your notes, reminders, and labels.
     *   **Folders as Labels**: Use folders to organize notes into categories.
-    *   **Pins**: Keep important notes at the top.
-    *   **Colors**: Color-code your notes for visual grouping.
-    *   **Archive & Trash**: Keep your workspace clutter-free.
-    *   **Label Management**: Long-press labels in the sidebar to delete empty ones.
-    *   **Empty Trash**: Permanently clear your trash with a single tap.
+    *   **Archive & Trash**: Keep your workspace clutter-free with industry-standard hidden folder structures.
+    *   **Pins & Colors**: Keep important notes at the top and visually grouped.
 *   **Privacy First**: No internet permissions required. No tracking. No cloud lock-in.
 *   **Modern UI**: Built with Jetpack Compose and Material 3, featuring Dark Mode support.
-*   **Smooth UX**: Splash screen matching theme, instant Dark Mode rendering, fluid screen transitions, and double-back to exit.
-*   **Intelligent Search**: Powerful search with "Search everywhere" fallback. If no results are found in your current view, MarkIt automatically searches through all active and archived notes.
-*   **Advanced Sorting**: Sort notes by Date Modified, Created, or Title.
+*   **Intelligent Search**: Powerful search with "Search everywhere" fallback.
 
 ## How it works: Total Portability
 
-MarkIt is designed with a **"Files First" philosophy**. Unlike most note apps that lock your data into a database, MarkIt uses your filesystem as the database. This ensures that your notes are manageable and readable anywhere, on any device, with any text editor, without losing any features or information.
-
-### Transparent Folder Structure
-Each **Label** is simply a folder. Moving a file between folders on your computer is the same as changing its label in the app.
-
-```text
-NotesRoot/
-├── Inbox/              <-- Default folder for new notes
-├── Work/               <-- A custom Label
-│   ├── Pinned/         <-- Notes pinned within this label
-│   │   └── Project.md
-│   └── Meeting.md
-├── .Archive/           <-- Hidden folder for archived notes
-│   └── Work/
-│       └── OldTask.md
-└── .Deleted/           <-- Hidden folder for the Trash
-    └── Inbox/
-        └── Junk.md
-```
+MarkIt Notes uses your filesystem as the database. This ensures that your notes are manageable and readable anywhere, on any device, with any text editor.
 
 ### Human-Readable Metadata
-Note-specific features (like background colors or reminders) are stored directly inside the `.md` file using **YAML Front Matter**. This is a industry-standard, human-readable format. 
-
-Even if you aren't using the app, you can see the color code or the reminder timestamp at a glance. You can even edit these values manually in a text editor, and MarkIt will reflect those changes.
+Note-specific features (like background colors or reminders) are stored directly inside the `.md` file using **YAML Front Matter**.
 
 ```markdown
 ---
@@ -65,8 +50,6 @@ reminder: 2026-02-15 09:00
 Your content here...
 ```
 
-This approach guarantees **no information loss** and **no vendor lock-in**. Your knowledge base is truly yours, forever.
-
 ## Installation
 
 1.  Download the latest APK from the [Releases](https://github.com/Waph1/MarkIt/releases) page.
@@ -75,17 +58,10 @@ This approach guarantees **no information loss** and **no vendor lock-in**. Your
 
 ## Building from source
 
-1.  Clone the repository:
-    ```bash
-    git clone https://github.com/Waph1/MarkIt.git
-    ```
+1.  Clone the repository: `git clone https://github.com/Waph1/MarkIt.git`
 2.  Open in **Android Studio**.
 3.  Build and Run.
 
 ## License
 
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
-
-[http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0)
-
-Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+Licensed under the Apache License, Version 2.0.
