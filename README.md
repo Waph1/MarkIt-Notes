@@ -1,4 +1,4 @@
-# MarkIt Notes (v5.2.0)
+# MarkIt Notes (v0.5.2)
 
 **MarkIt Notes** is a modern, beautiful, and privacy-focused Markdown note-taking app for Android. Designed with a clean Google Keep-inspired aesthetic, it puts your content first while giving you the power of Markdown formatting through a revolutionary **Hybrid Editing** experience.
 
@@ -52,13 +52,13 @@ Your content here...
 
 ## Installation
 
-1.  Download the latest APK from the [Releases](https://github.com/Waph1/MarkIt/releases) page.
+1.  Download the latest APK from the [Releases](https://github.com/Waph1/MarkIt-Notes/releases) page.
 2.  Install it on your Android device.
 3.  On first launch, select a folder where you want your notes to live.
 
 ## Building from source
 
-1.  Clone the repository: `git clone https://github.com/Waph1/MarkIt.git`
+1.  Clone the repository: `git clone https://github.com/Waph1/MarkIt-Notes.git`
 2.  Open in **Android Studio**.
 3.  Build and Run.
 

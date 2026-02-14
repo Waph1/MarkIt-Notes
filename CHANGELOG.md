@@ -1,6 +1,6 @@
 # Changelog
 
-## [5.2.0] - 2026-02-14
+## [0.5.2] - 2026-02-14
 ### Added
 - **Feature**: Added "Pull to Refresh" functionality in the main notes list to sync files manually.
 - **Feature**: Enabled auto-capitalization for sentences in the note editor (Title and Content).
@@ -10,7 +10,7 @@
 - **Refactor**: Removed legacy `FileNoteRepository` and consolidated data access in `RoomNoteRepository`.
 - **Polish**: Fixed various compiler warnings and optimized imports.
 
-## [5.0.1] - 2026-02-11
+## [0.5.1] - 2026-02-11
 ### Added
 - **UI**: Added a 3-dots overflow menu for "Archive" and "Delete" actions in the Dashboard and Editor.
 - **UI**: Added "Empty Trash" action to a 3-dots menu in the Trash view.
