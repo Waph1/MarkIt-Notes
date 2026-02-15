@@ -402,21 +402,21 @@ fun EditorScreen(
                         LazyRow(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                .padding(vertical = 12.dp, horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             item {
                                 Box(
                                     modifier = Modifier
-                                        .size(32.dp)
+                                        .size(40.dp)
                                         .clip(CircleShape)
                                         .background(Color(color.toInt()))
-                                        .border(1.dp, Color.Gray, CircleShape)
+                                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
                                         .clickable { showColorPicker = true }
                                 )
                             }
-                            item { Spacer(Modifier.width(8.dp)) }
+                            item { VerticalDivider(Modifier.height(32.dp).padding(horizontal = 4.dp)) }
                             item {
                                 Box {
                                     ToolbarIconButton(
@@ -439,15 +439,16 @@ fun EditorScreen(
                                 }
                             }
                             item { ToolbarIconButton(text = "—", onClick = { insertAtCursor("---\n") }) }
-                            item { VerticalDivider(Modifier.height(24.dp)) }
+                            item { VerticalDivider(Modifier.height(32.dp).padding(horizontal = 4.dp)) }
                             item { ToolbarIconButton(text = "B", bold = true, onClick = { insertAtCursor("**", "**") }) }
                             item { ToolbarIconButton(text = "I", italic = true, onClick = { insertAtCursor("_", "_") }) }
                             item { ToolbarIconButton(text = "U", underline = true, onClick = { insertAtCursor("<u>", "</u>") }) }
                             item { ToolbarIconButton(text = "S", strikethrough = true, onClick = { insertAtCursor("~~", "~~") }) }
-                            item { VerticalDivider(Modifier.height(24.dp)) }
+                            item { VerticalDivider(Modifier.height(32.dp).padding(horizontal = 4.dp)) }
                             item { ToolbarIconButton(text = "🔗", onClick = { insertAtCursor("[", "](url)") }) }
                             item { ToolbarIconButton(text = "<>", onClick = { insertAtCursor("`", "`") }) }
                             item { ToolbarIconButton(text = "\"", onClick = { insertAtCursor("> ") }) }
+                            item { VerticalDivider(Modifier.height(32.dp).padding(horizontal = 4.dp)) }
                             item {
                                 Box {
                                     ToolbarIconButton(
@@ -663,18 +664,18 @@ fun ToolbarIconButton(
 ) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.secondaryContainer)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
             )
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.bodyMedium.copy(
+            style = MaterialTheme.typography.labelLarge.copy(
                 fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
                 fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
                 textDecoration = when {
@@ -684,7 +685,7 @@ fun ToolbarIconButton(
                     else -> null
                 }
             ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSecondaryContainer
         )
     }
 }

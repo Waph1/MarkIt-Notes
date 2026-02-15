@@ -10,7 +10,10 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 
+import android.util.Log
+
 class MetadataManager(private val context: Context) {
+    private val TAG = "MetadataManager"
     private val gson = Gson()
     private val CONFIG_FILENAME = "keepnotes_config.json" // Removed leading dot to ensure visibility
 
@@ -23,7 +26,7 @@ class MetadataManager(private val context: Context) {
                     gson.fromJson(reader, AppConfig::class.java)
                 } ?: AppConfig()
             } catch (e: Exception) {
-                e.printStackTrace() // Log error
+                Log.e(TAG, "Error loading config", e)
                 AppConfig()
             }
         } else {
@@ -46,7 +49,7 @@ class MetadataManager(private val context: Context) {
                     writer.flush()
                 }
             } catch (e: Exception) {
-                e.printStackTrace() // Log error for debugging
+                Log.e(TAG, "Error saving config", e)
             }
         }
     }

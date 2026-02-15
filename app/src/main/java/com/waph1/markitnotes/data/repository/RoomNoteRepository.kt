@@ -19,6 +19,8 @@ import java.io.OutputStreamWriter
 import java.util.Date
 import androidx.room.withTransaction
 
+import com.waph1.markitnotes.data.utils.NoteFormatUtils
+
 class RoomNoteRepository(
     private val context: Context,
     private val metadataManager: MetadataManager
@@ -31,92 +33,30 @@ class RoomNoteRepository(
     
     private val contentCache = mutableMapOf<String, Pair<Long, String>>()
 
-    private data class FrontMatterData(val color: Long, val reminder: Long?, val cleanContent: String)
-
-    private fun parseFrontMatter(rawContent: String): FrontMatterData {
-        val lines = rawContent.lines()
-        if (lines.size < 3 || lines[0].trim() != "---") {
-            return FrontMatterData(0xFFFFFFFF, null, rawContent)
-        }
-        
-        val closingIndexInDropped = lines.drop(1).indexOfFirst { it.trim() == "---" }
-        if (closingIndexInDropped == -1) {
-            return FrontMatterData(0xFFFFFFFF, null, rawContent)
-        }
-        
-        val actualClosingIndex = closingIndexInDropped + 1
-        val yamlLines = lines.subList(1, actualClosingIndex)
-        
-        var contentStartIndex = actualClosingIndex + 1
-        while (contentStartIndex < lines.size && lines[contentStartIndex].isBlank()) {
-            contentStartIndex++
-        }
-        
-        val cleanContent = if (contentStartIndex < lines.size) {
-            lines.subList(contentStartIndex, lines.size).joinToString("\n")
-        } else {
-            ""
-        }
-        
-        var color = 0xFFFFFFFF
-        var reminder: Long? = null
-        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
-        
-        yamlLines.forEach { line ->
-            val parts = line.split(":", limit = 2)
-            if (parts.size == 2) {
-                val key = parts[0].trim()
-                val value = parts[1].trim()
-                when (key) {
-                    "color" -> {
-                        try {
-                            if (value.startsWith("#")) {
-                                val hex = value.substring(1)
-                                color = java.lang.Long.parseUnsignedLong(hex, 16)
-                                if (hex.length == 6) color = color or 0xFF000000
-                            } else {
-                                color = value.toLong()
-                            }
-                        } catch (e: Exception) {}
-                    }
-                    "reminder" -> {
-                        try {
-                            reminder = dateFormat.parse(value)?.time
-                        } catch (e: Exception) {
-                            reminder = value.toLongOrNull()
-                        }
-                    }
-                }
-            }
-        }
-        
-        return FrontMatterData(color, reminder, cleanContent)
-    }
-
-    private fun constructFileContent(note: Note): String {
-        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
-        return buildString {
-            append("---\n")
-            append(String.format("color: #%08X\n", note.color))
-            note.reminder?.let {
-                append("reminder: ")
-                append(dateFormat.format(Date(it)))
-                append("\n")
-            }
-            append("---\n\n")
-            append(note.content)
-        }
-    }
-
     override suspend fun setRootFolder(uriString: String) {
-        val uri = Uri.parse(uriString)
-        rootDir = DocumentFile.fromTreeUri(context, uri)
-        
-        rootDir?.let {
-            appConfig = metadataManager.loadConfig(it)
+        try {
+            val uri = Uri.parse(uriString)
+            // Validate permission first
+            try {
+                context.contentResolver.takePersistableUriPermission(uri, 
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            } catch (e: SecurityException) {
+                // Permission might already be granted or not persistable, proceed with caution
+                android.util.Log.w("RoomNoteRepository", "Could not take persistable permission: ${e.message}")
+            }
+            
+            val docFile = DocumentFile.fromTreeUri(context, uri)
+            if (docFile == null || !docFile.canRead()) {
+                android.util.Log.e("RoomNoteRepository", "Root folder is not readable or null: $uriString")
+                return
+            }
+            
+            rootDir = docFile
+            appConfig = metadataManager.loadConfig(docFile)
+            refreshNotes()
+        } catch (e: Exception) {
+            android.util.Log.e("RoomNoteRepository", "Error setting root folder: $uriString", e)
         }
-        
-        refreshNotes()
     }
     
     override fun getAllNotes(): Flow<List<Note>> {
@@ -254,7 +194,7 @@ class RoomNoteRepository(
             targetFileDoc = targetDir.createFile("text/markdown", finalFileName)
         }
         
-        val fullContent = constructFileContent(note)
+        val fullContent = NoteFormatUtils.constructFileContent(note)
         
         targetFileDoc?.let { doc ->
             context.contentResolver.openOutputStream(doc.uri, "wt")?.use { outputStream ->
@@ -434,80 +374,152 @@ class RoomNoteRepository(
         val root = rootDir ?: return@withContext
         
         try {
-            val allEntities = mutableListOf<NoteEntity>()
-            if (root.findFile("Inbox") == null) root.createDirectory("Inbox")
+            // 1. Get current DB state
+            val dbNotes = noteDao.getAllNotesSync().associateBy { it.filePath }
+            val dbPaths = dbNotes.keys
             
-            root.listFiles().filter { it.isDirectory && !it.name!!.startsWith(".") }.forEach { folder ->
-                scanFolderToEntities(folder, isArchived = false, isTrashed = false, allEntities)
+            // 2. Scan file system for file metadata only
+            val fsFiles = mutableMapOf<String, FileMeta>()
+            
+            try {
+                if (root.findFile("Inbox") == null) root.createDirectory("Inbox")
+                
+                // Scan standard folders
+                root.listFiles().filter { it.isDirectory && !it.name!!.startsWith(".") }.forEach { folder ->
+                    scanFolderMeta(folder, isArchived = false, isTrashed = false, fsFiles)
+                }
+                
+                // Scan Archive
+                root.findFile(".Archive")?.listFiles()?.filter { it.isDirectory }?.forEach { folder ->
+                    scanFolderMeta(folder, isArchived = true, isTrashed = false, fsFiles)
+                }
+                
+                // Scan Trash
+                root.findFile(".Deleted")?.listFiles()?.filter { it.isDirectory }?.forEach { folder ->
+                    scanFolderMeta(folder, isArchived = false, isTrashed = true, fsFiles)
+                }
+            } catch (e: Exception) {
+                 android.util.Log.e("RoomNoteRepository", "Error scanning root structure", e)
             }
             
-            root.findFile(".Archive")?.listFiles()?.filter { it.isDirectory }?.forEach { folder ->
-                scanFolderToEntities(folder, isArchived = true, isTrashed = false, allEntities)
+            val fsPaths = fsFiles.keys
+            
+            // 3. Determine changes
+            val toDelete = dbPaths.filter { !fsPaths.contains(it) }
+            val toProcess = fsPaths.filter { path ->
+                val meta = fsFiles[path]!!
+                val dbNote = dbNotes[path]
+                dbNote == null || meta.lastModified > dbNote.lastModifiedMs
             }
             
-            root.findFile(".Deleted")?.listFiles()?.filter { it.isDirectory }?.forEach { folder ->
-                scanFolderToEntities(folder, isArchived = false, isTrashed = true, allEntities)
+            // 4. Process updates (Read content only for changed files)
+            val notesToUpsert = mutableListOf<NoteEntity>()
+            toProcess.forEach { path ->
+                try {
+                    val meta = fsFiles[path]!!
+                    val rawContent = readText(meta.file)
+                    val frontMatter = NoteFormatUtils.parseFrontMatter(rawContent)
+                    
+                    val color = if (frontMatter.color != 0xFFFFFFFF) frontMatter.color else appConfig.fileColors[meta.fileName] ?: 0xFFFFFFFF
+                    
+                    notesToUpsert.add(
+                        NoteEntity(
+                            filePath = path,
+                            fileName = meta.fileName,
+                            folder = meta.folderName,
+                            title = meta.fileName.substringBeforeLast("."),
+                            contentPreview = frontMatter.cleanContent.take(200),
+                            content = frontMatter.cleanContent,
+                            lastModifiedMs = meta.lastModified,
+                            color = color,
+                            reminder = frontMatter.reminder,
+                            isPinned = meta.isPinned,
+                            isArchived = meta.isArchived,
+                            isTrashed = meta.isTrashed
+                        )
+                    )
+                } catch (e: Exception) {
+                    android.util.Log.e("RoomNoteRepository", "Error processing file: $path", e)
+                }
             }
             
-            val labels = mutableSetOf<String>()
-            root.listFiles().filter { it.isDirectory && !it.name!!.startsWith(".") }.forEach { 
-                 it.name?.let { name -> labels.add(name) }
+            // 5. Update DB
+            if (toDelete.isNotEmpty()) {
+                noteDao.deleteNotesByPaths(toDelete)
+            }
+            if (notesToUpsert.isNotEmpty()) {
+                noteDao.insertNotes(notesToUpsert)
             }
             
-            AppDatabase.getDatabase(context).withTransaction {
-                noteDao.deleteAll()
-                noteDao.insertNotes(allEntities)
+            // 6. Sync Labels (Simple approach: rebuild from current valid notes)
+            // Ideally we'd do this incrementally too, but labels are lightweight.
+            val currentLabels = mutableSetOf<String>()
+            try {
+                // Add folders from FS
+                root.listFiles().filter { it.isDirectory && !it.name!!.startsWith(".") }.forEach { 
+                     it.name?.let { name -> currentLabels.add(name) }
+                }
+                
+                // Update labels in DB
+                // We can just nuke and rebuild labels as they are just folder names
                 labelDao.deleteAll()
-                labels.forEach { labelDao.insert(LabelEntity(it)) }
+                currentLabels.forEach { labelDao.insert(LabelEntity(it)) }
+            } catch (e: Exception) {
+                 android.util.Log.e("RoomNoteRepository", "Error syncing labels", e)
             }
+            
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("RoomNoteRepository", "Critical error in refreshNotes", e)
         }
     }
     
-    private suspend fun scanFolderToEntities(
+    private data class FileMeta(
+        val file: DocumentFile,
+        val fileName: String,
+        val folderName: String,
+        val lastModified: Long,
+        val isPinned: Boolean,
+        val isArchived: Boolean,
+        val isTrashed: Boolean
+    )
+
+    private fun scanFolderMeta(
         folder: DocumentFile,
         isArchived: Boolean,
         isTrashed: Boolean,
-        output: MutableList<NoteEntity>
+        output: MutableMap<String, FileMeta>
     ) {
         val folderName = folder.name ?: return
         
-        suspend fun processFiles(dir: DocumentFile, isPinned: Boolean) {
-            dir.listFiles().filter { it.isFile && (it.name?.endsWith(".md") == true || it.name?.endsWith(".txt") == true) }.forEach { file ->
-                val fileName = file.name ?: return@forEach
-                val rawContent = readText(file)
-                val metadata = parseFrontMatter(rawContent)
-                
-                val color = if (metadata.color != 0xFFFFFFFF) metadata.color else appConfig.fileColors[fileName] ?: 0xFFFFFFFF
-                val reminder = metadata.reminder
-                val lastModified = file.lastModified()
-                
-                output.add(
-                    NoteEntity(
-                        filePath = "$folderName/$fileName",
+        fun processFiles(dir: DocumentFile, isPinned: Boolean) {
+            try {
+                dir.listFiles().filter { it.isFile && (it.name?.endsWith(".md") == true || it.name?.endsWith(".txt") == true) }.forEach { file ->
+                    val fileName = file.name ?: return@forEach
+                    val filePath = "$folderName/$fileName"
+                    output[filePath] = FileMeta(
+                        file = file,
                         fileName = fileName,
-                        folder = folderName,
-                        title = fileName.substringBeforeLast("."),
-                        contentPreview = metadata.cleanContent.take(200),
-                        content = metadata.cleanContent,
-                        lastModifiedMs = lastModified,
-                        color = color,
-                        reminder = reminder,
+                        folderName = folderName,
+                        lastModified = file.lastModified(),
                         isPinned = isPinned,
                         isArchived = isArchived,
                         isTrashed = isTrashed
                     )
-                )
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("RoomNoteRepository", "Error scanning folder: ${dir.uri}", e)
             }
         }
 
         processFiles(folder, isPinned = false)
         
         if (!isArchived && !isTrashed) {
-            val pinnedDir = folder.findFile("Pinned")
-            if (pinnedDir != null) {
-                processFiles(pinnedDir, isPinned = true)
+            try {
+                folder.findFile("Pinned")?.let {
+                    processFiles(it, isPinned = true)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("RoomNoteRepository", "Error scanning Pinned folder in $folderName", e)
             }
         }
     }

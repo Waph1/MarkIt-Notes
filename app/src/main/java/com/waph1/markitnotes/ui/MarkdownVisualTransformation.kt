@@ -26,6 +26,16 @@ class MarkdownVisualTransformation(
     }
 }
 
+private val headingRegex = Regex("""^(#{1,6}\s+)(.*)$""", RegexOption.MULTILINE)
+private val boldRegex = Regex("""\*\*([^\s*][^*]*[^\s*]|[^\s*])\*\*""")
+private val italicRegex = Regex("""(?<!\*)\*([^\*]+)\*|(?<!_)_([^_]+)_""")
+private val strikeRegex = Regex("""~~(.*?)~~""")
+private val underlineRegex = Regex("""<u>(.*?)</u>""")
+private val codeRegex = Regex("""`(.*?)`""")
+private val checkboxRegex = Regex("""^(\s*[-*+]\s+\[[ xX]\]\s+)(.*)$""", RegexOption.MULTILINE)
+private val listRegex = Regex("""^(\s*[-*+•]|\d+\.)\s+(.*)$""", RegexOption.MULTILINE)
+private val quoteRegex = Regex("""^(\s*>\s+)(.*)$""", RegexOption.MULTILINE)
+
 fun buildAnnotatedStringWithMarkdown(
     text: String,
     cursorPosition: Int,
@@ -37,7 +47,6 @@ fun buildAnnotatedStringWithMarkdown(
         append(text)
         
         // 1. Headings
-        val headingRegex = Regex("""^(#{1,6}\s+)(.*)$""", RegexOption.MULTILINE)
         headingRegex.findAll(text).forEach { match ->
             val hashPart = match.groups[1]!!
             val contentPart = match.groups[2]!!
@@ -62,7 +71,6 @@ fun buildAnnotatedStringWithMarkdown(
         }
 
         // 2. Bold
-        val boldRegex = Regex("""\*\*([^\s*][^*]*[^\s*]|[^\s*])\*\*""")
         boldRegex.findAll(text).forEach { match ->
             val start = match.range.start
             val end = match.range.endInclusive + 1
@@ -83,7 +91,6 @@ fun buildAnnotatedStringWithMarkdown(
         }
 
         // 3. Italic
-        val italicRegex = Regex("""(?<!\*)\*([^\*]+)\*|(?<!_)_([^_]+)_""")
         italicRegex.findAll(text).forEach { match ->
             val start = match.range.start
             val end = match.range.endInclusive + 1
@@ -104,7 +111,6 @@ fun buildAnnotatedStringWithMarkdown(
         }
 
         // 4. Strikethrough
-        val strikeRegex = Regex("""~~(.*?)~~""")
         strikeRegex.findAll(text).forEach { match ->
             val start = match.range.start
             val end = match.range.endInclusive + 1
@@ -125,7 +131,6 @@ fun buildAnnotatedStringWithMarkdown(
         }
 
         // 5. Underline
-        val underlineRegex = Regex("""<u>(.*?)</u>""")
         underlineRegex.findAll(text).forEach { match ->
             val start = match.range.start
             val end = match.range.endInclusive + 1
@@ -146,7 +151,6 @@ fun buildAnnotatedStringWithMarkdown(
         }
 
         // 6. Code
-        val codeRegex = Regex("""`(.*?)`""")
         codeRegex.findAll(text).forEach { match ->
             val start = match.range.start
             val end = match.range.endInclusive + 1
@@ -167,7 +171,6 @@ fun buildAnnotatedStringWithMarkdown(
         }
 
         // 7. Checkboxes and Lists
-        val checkboxRegex = Regex("""^(\s*[-*+]\s+\[[ xX]\]\s+)(.*)$""", RegexOption.MULTILINE)
         checkboxRegex.findAll(text).forEach { match ->
             val prefixPart = match.groups[1]!!
             val contentPart = match.groups[2]!!
@@ -179,7 +182,6 @@ fun buildAnnotatedStringWithMarkdown(
             }
         }
         
-        val listRegex = Regex("""^(\s*[-*+•]|\d+\.)\s+(.*)$""", RegexOption.MULTILINE)
         listRegex.findAll(text).forEach { match ->
             if (match.value.contains("[ ]") || match.value.contains("[x]")) return@forEach
             val prefixPart = match.groups[1]!!
@@ -187,7 +189,6 @@ fun buildAnnotatedStringWithMarkdown(
         }
 
         // 8. Blockquotes
-        val quoteRegex = Regex("""^(\s*>\s+)(.*)$""", RegexOption.MULTILINE)
         quoteRegex.findAll(text).forEach { match ->
             val prefixPart = match.groups[1]!!
             val contentPart = match.groups[2]!!

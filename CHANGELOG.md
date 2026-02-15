@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.0] - 2026-02-15
+### Added
+- **Navigation**: Improved drawer interaction. It can now be closed using the Android back button, clicking the screen overlay (scrim), or swipe-to-close.
+- **Code**: Extracted parsing logic into `NoteFormatUtils` for better maintenance.
+
+### Fixed
+- **UI**: Fixed a bug where headers and separators would disappear when Pinned notes were present due to duplicate item keys.
+- **UI**: Fixed archived notes separator visibility in label views.
+- **Stability**: Added multiple layers of protection against OOM and rendering crashes for large notes.
+- **Sync**: Resolved a critical crash during incremental sync with existing folders.
+
+### Changed
+- **UX**: Completely disabled swipe-to-open gesture for the navigation drawer to prevent accidental triggers.
+- **UI**: Improved visual hierarchy by moving header separators to the top of section titles.
+- **Branding**: Reverted version text in sidebar for a cleaner interface.
+
 ## [0.5.2] - 2026-02-14
 ### Added
 - **Feature**: Added "Pull to Refresh" functionality in the main notes list to sync files manually.

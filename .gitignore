@@ -15,3 +15,4 @@ app/build/
 .gradle/
 .github_creds/
 dev_docs/
+.gemini_tools/

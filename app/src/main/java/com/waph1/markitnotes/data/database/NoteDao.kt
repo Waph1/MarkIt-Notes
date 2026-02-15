@@ -10,19 +10,19 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface NoteDao {
     
-    @Query("SELECT * FROM notes WHERE isTrashed = 0 AND isArchived = 0 ORDER BY isPinned DESC, lastModifiedMs DESC")
+    @Query("SELECT filePath, fileName, folder, title, contentPreview, substr(contentPreview, 1, 500) AS content, lastModifiedMs, color, reminder, isPinned, isArchived, isTrashed FROM notes WHERE isTrashed = 0 AND isArchived = 0 ORDER BY isPinned DESC, lastModifiedMs DESC")
     fun getAllActiveNotes(): Flow<List<NoteEntity>>
 
-    @Query("SELECT * FROM notes WHERE isTrashed = 0 ORDER BY isPinned DESC, lastModifiedMs DESC")
+    @Query("SELECT filePath, fileName, folder, title, contentPreview, substr(contentPreview, 1, 500) AS content, lastModifiedMs, color, reminder, isPinned, isArchived, isTrashed FROM notes WHERE isTrashed = 0 ORDER BY isPinned DESC, lastModifiedMs DESC")
     fun getAllNotesWithArchive(): Flow<List<NoteEntity>>
     
-    @Query("SELECT * FROM notes WHERE isTrashed = 1 ORDER BY lastModifiedMs DESC")
+    @Query("SELECT filePath, fileName, folder, title, contentPreview, substr(contentPreview, 1, 500) AS content, lastModifiedMs, color, reminder, isPinned, isArchived, isTrashed FROM notes WHERE isTrashed = 1 ORDER BY lastModifiedMs DESC")
     fun getTrashedNotes(): Flow<List<NoteEntity>>
     
-    @Query("SELECT * FROM notes WHERE isArchived = 1 AND isTrashed = 0 ORDER BY lastModifiedMs DESC")
+    @Query("SELECT filePath, fileName, folder, title, contentPreview, substr(contentPreview, 1, 500) AS content, lastModifiedMs, color, reminder, isPinned, isArchived, isTrashed FROM notes WHERE isArchived = 1 AND isTrashed = 0 ORDER BY lastModifiedMs DESC")
     fun getArchivedNotes(): Flow<List<NoteEntity>>
     
-    @Query("SELECT * FROM notes WHERE folder = :folder AND isTrashed = 0 ORDER BY isPinned DESC, lastModifiedMs DESC")
+    @Query("SELECT filePath, fileName, folder, title, contentPreview, substr(contentPreview, 1, 500) AS content, lastModifiedMs, color, reminder, isPinned, isArchived, isTrashed FROM notes WHERE folder = :folder AND isTrashed = 0 ORDER BY isPinned DESC, lastModifiedMs DESC")
     fun getNotesByFolder(folder: String): Flow<List<NoteEntity>>
     
     @Query("SELECT * FROM notes WHERE filePath = :filePath")
@@ -66,4 +66,10 @@ interface NoteDao {
     
     @Query("DELETE FROM notes WHERE isTrashed = 1")
     suspend fun deleteAllTrashed()
+
+    @Query("SELECT * FROM notes")
+    suspend fun getAllNotesSync(): List<NoteEntity>
+
+    @Query("DELETE FROM notes WHERE filePath IN (:filePaths)")
+    suspend fun deleteNotesByPaths(filePaths: List<String>)
 }

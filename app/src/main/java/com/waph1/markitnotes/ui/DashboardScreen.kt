@@ -85,12 +85,14 @@ import androidx.activity.ComponentActivity
 fun DashboardScreen(
     viewModel: MainViewModel,
     listState: LazyStaggeredGridState,
+    isDrawerOpen: Boolean,
     onSelectFolder: () -> Unit,
     onNoteClick: (Note) -> Unit,
     onFabClick: () -> Unit,
     onOpenDrawer: () -> Unit
 ) {
     val notes by viewModel.notes.collectAsState()
+    val uiItems by viewModel.uiItems.collectAsState()
     val labels by viewModel.labels.collectAsState()
     val isPermissionNeeded by viewModel.isPermissionNeeded.collectAsState()
     val isSearchEverywhere by viewModel.isSearchEverywhere.collectAsState()
@@ -188,7 +190,7 @@ fun DashboardScreen(
     // Double back to exit state
     var lastBackPressTime by remember { mutableStateOf(0L) }
     
-    BackHandler {
+    BackHandler(enabled = !isDrawerOpen) {
         when {
             isInSelectionMode -> {
                 viewModel.clearSelection()
@@ -327,13 +329,11 @@ fun DashboardScreen(
 
                 Box(modifier = Modifier.nestedScroll(pullRefreshState.nestedScrollConnection)) {
                     NoteGrid(
-                        notes = notes,
+                        uiItems = uiItems,
                         selectedNotes = selectedNotes,
                         isLoading = isLoading,
-                        isSearchEverywhere = isSearchEverywhere,
-                        searchQuery = searchQuery,
+                        notesCount = notes.size,
                         viewMode = viewMode,
-                        currentFilter = currentFilter,
                         listState = listState,
                         onNoteClick = { note ->
                             if (isInSelectionMode) {
@@ -358,33 +358,20 @@ fun DashboardScreen(
 }
 }
 
-private sealed interface DashboardUiItem {
-    val key: String
-    data class NoteItem(val note: Note) : DashboardUiItem {
-        override val key: String = note.file.path
-    }
-    data class HeaderItem(val title: String) : DashboardUiItem {
-        override val key: String = "header_$title"
-    }
-    object SpacerItem : DashboardUiItem {
-        override val key: String = "spacer_bottom"
-    }
-}
+
 
 @Composable
 fun NoteGrid(
-    notes: List<Note>,
+    uiItems: List<DashboardUiItem>,
     selectedNotes: Set<String>,
     isLoading: Boolean,
-    isSearchEverywhere: Boolean,
-    searchQuery: String,
+    notesCount: Int,
     viewMode: PrefsManager.ViewMode,
-    currentFilter: MainViewModel.NoteFilter,
     listState: LazyStaggeredGridState,
     onNoteClick: (Note) -> Unit,
     onNoteLongClick: (Note) -> Unit
 ) {
-    if (isLoading && notes.isEmpty()) {
+    if (isLoading && notesCount == 0) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 androidx.compose.material3.CircularProgressIndicator()
@@ -396,7 +383,7 @@ fun NoteGrid(
                 )
             }
         }
-    } else if (notes.isEmpty()) {
+    } else if (notesCount == 0) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
@@ -414,51 +401,6 @@ fun NoteGrid(
             }
         }
     } else {
-        val showSeparator = currentFilter is MainViewModel.NoteFilter.Label
-        val isTrash = currentFilter is MainViewModel.NoteFilter.Trash
-        val isArchive = currentFilter is MainViewModel.NoteFilter.Archive
-        
-        val searchEverywhereLabel = androidx.compose.ui.res.stringResource(com.waph1.markitnotes.R.string.search_everywhere)
-        val searchResultsLabel = androidx.compose.ui.res.stringResource(com.waph1.markitnotes.R.string.search_results)
-        val pinnedLabel = androidx.compose.ui.res.stringResource(com.waph1.markitnotes.R.string.pinned)
-        val othersLabel = androidx.compose.ui.res.stringResource(com.waph1.markitnotes.R.string.others)
-        val archivedNotesLabel = androidx.compose.ui.res.stringResource(com.waph1.markitnotes.R.string.archived_notes_header)
-
-        val uiItems = remember(notes, currentFilter, isSearchEverywhere, searchQuery) {
-            val list = mutableListOf<DashboardUiItem>()
-            
-            if (isSearchEverywhere) {
-                list.add(DashboardUiItem.HeaderItem(searchEverywhereLabel))
-                notes.forEach { list.add(DashboardUiItem.NoteItem(it)) }
-            } else if (searchQuery.isNotBlank()) {
-                list.add(DashboardUiItem.HeaderItem(searchResultsLabel))
-                notes.forEach { list.add(DashboardUiItem.NoteItem(it)) }
-            } else if (isTrash || isArchive) {
-                notes.forEach { list.add(DashboardUiItem.NoteItem(it)) }
-            } else {
-                 val pinned = notes.filter { it.isPinned && !it.isArchived }
-                 val others = notes.filter { !it.isPinned && !it.isArchived }
-                 val archived = notes.filter { it.isArchived }
-
-                 if (pinned.isNotEmpty()) {
-                     list.add(DashboardUiItem.HeaderItem(pinnedLabel))
-                     pinned.forEach { list.add(DashboardUiItem.NoteItem(it)) }
-                 }
-
-                 if (pinned.isNotEmpty() && others.isNotEmpty()) {
-                     list.add(DashboardUiItem.HeaderItem(othersLabel))
-                 }
-                 others.forEach { list.add(DashboardUiItem.NoteItem(it)) }
-
-                 if (archived.isNotEmpty() && showSeparator) {
-                    list.add(DashboardUiItem.HeaderItem(archivedNotesLabel))
-                    archived.forEach { list.add(DashboardUiItem.NoteItem(it)) }
-                 }
-            }
-            list.add(DashboardUiItem.SpacerItem)
-            list
-        }
-
         val columns = if (viewMode == PrefsManager.ViewMode.GRID) 2 else 1
 
         LazyVerticalStaggeredGrid(
@@ -479,23 +421,36 @@ fun NoteGrid(
             ) { item ->
                 when (item) {
                     is DashboardUiItem.HeaderItem -> {
+                        val title = when (item.type) {
+                            DashboardUiItem.HeaderType.PINNED -> androidx.compose.ui.res.stringResource(com.waph1.markitnotes.R.string.pinned)
+                            DashboardUiItem.HeaderType.OTHERS -> androidx.compose.ui.res.stringResource(com.waph1.markitnotes.R.string.others)
+                            DashboardUiItem.HeaderType.ARCHIVED -> androidx.compose.ui.res.stringResource(com.waph1.markitnotes.R.string.archived_notes_header)
+                            DashboardUiItem.HeaderType.SEARCH_RESULTS -> androidx.compose.ui.res.stringResource(com.waph1.markitnotes.R.string.search_results)
+                            DashboardUiItem.HeaderType.SEARCH_EVERYWHERE -> androidx.compose.ui.res.stringResource(com.waph1.markitnotes.R.string.search_everywhere)
+                        }
+                        
                         Column(modifier = Modifier.fillMaxWidth().padding(start = 8.dp, bottom = 4.dp, top = 8.dp)) {
+                             if (item.type == DashboardUiItem.HeaderType.OTHERS || item.type == DashboardUiItem.HeaderType.ARCHIVED) {
+                                 androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
+                             }
                              Text(
-                                 text = item.title,
+                                 text = title,
                                  style = MaterialTheme.typography.labelSmall
                              )
-                             if (item.title == "Archived notes") {
-                                 androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
-                             }
                         }
                     }
                     is DashboardUiItem.NoteItem -> {
-                        NoteCard(
-                            note = item.note, 
-                            isSelected = selectedNotes.contains(item.note.file.path),
-                            onClick = { onNoteClick(item.note) },
-                            onLongClick = { onNoteLongClick(item.note) }
-                        )
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = true,
+                            enter = fadeIn() + slideInVertically { it / 2 }
+                        ) {
+                            NoteCard(
+                                note = item.note, 
+                                isSelected = selectedNotes.contains(item.note.file.path),
+                                onClick = { onNoteClick(item.note) },
+                                onLongClick = { onNoteLongClick(item.note) }
+                            )
+                        }
                     }
                     is DashboardUiItem.SpacerItem -> {
                          androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(80.dp).fillMaxWidth())
@@ -519,11 +474,15 @@ fun NoteCard(
     val noteColor = Color(note.color.toInt())
     
     val containerColor = if (isDark) {
-        if (note.color == 0xFFFFFFFF) MaterialTheme.colorScheme.surfaceVariant
-        else noteColor.copy(alpha = 0.3f).compositeOver(MaterialTheme.colorScheme.surface)
+        if (note.color == 0xFFFFFFFF.toLong()) MaterialTheme.colorScheme.surfaceVariant
+        else noteColor.copy(alpha = 0.4f).compositeOver(MaterialTheme.colorScheme.surface)
     } else {
         noteColor
     }
+
+    val contentColor = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+    val titleStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+    val contentStyle = MaterialTheme.typography.bodyMedium.copy(color = contentColor)
 
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val onLongClickAction = {
@@ -536,61 +495,55 @@ fun NoteCard(
             .fillMaxWidth()
             .combinedClickable(
                 interactionSource = interactionSource,
-                indication = androidx.compose.foundation.LocalIndication.current,
+                indication = androidx.compose.material.ripple.rememberRipple(),
                 onClick = onClick,
                 onLongClick = onLongClickAction
             )
-            .then(if (isSelected) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)) else Modifier),
-        shape = RoundedCornerShape(12.dp),
+            .then(
+                if (isSelected) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp)) 
+                else Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+            ),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = containerColor
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp) // Flat style by default, let color define hierarchy
     ) {
         Column(
-            modifier = Modifier.padding(12.dp)
+            modifier = Modifier.padding(16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                if (note.title.isNotEmpty()) {
-                    Text(
-                        text = note.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.weight(1f).padding(bottom = 8.dp)
-                    )
-                } else {
-                    Spacer(Modifier.weight(1f))
-                }
-                
-                if (note.reminder != null) {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = "Reminder",
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            if (note.folder != "Unknown" && note.folder != "Inbox") {
-                 Text(
-                    text = note.folder,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp).background(Color(0x22000000), RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 2.dp)
+            if (note.title.isNotEmpty()) {
+                Text(
+                    text = note.title,
+                    style = titleStyle,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
+            
             if (note.content.isNotEmpty()) {
                 Box {
-                    MarkdownText(
-                        markdown = note.content,
-                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface),
-                        maxLines = 10,
-                        modifier = Modifier.padding(top = 4.dp)
+                    val annotatedContent = remember(note.content, isDark) {
+                        try {
+                            // Truncate content for preview to avoid processing huge files
+                            val previewContent = if (note.content.length > 500) {
+                                note.content.take(500) + "..."
+                            } else {
+                                note.content
+                            }
+                            buildAnnotatedStringWithMarkdown(previewContent, -1, isDark)
+                        } catch (e: Exception) {
+                            androidx.compose.ui.text.AnnotatedString(note.content)
+                        }
+                    }
+                    
+                    Text(
+                        text = annotatedContent,
+                        style = contentStyle,
+                        maxLines = 8,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(bottom = 8.dp)
                     )
+                    // Invisible overlay to capture clicks on markdown (which might have links)
                     Box(
                         modifier = Modifier
                             .matchParentSize()
@@ -600,6 +553,41 @@ fun NoteCard(
                                 onClick = onClick,
                                 onLongClick = onLongClickAction
                             )
+                    )
+                }
+            }
+            
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                 if (note.folder != "Unknown" && note.folder != "Inbox") {
+                     Text(
+                        text = note.folder,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+                
+                if (note.reminder != null) {
+                    Icon(
+                        imageVector = Icons.Outlined.Notifications,
+                        contentDescription = "Reminder",
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    
+                    val date = java.util.Date(note.reminder)
+                    val format = java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault())
+                    Text(
+                        text = format.format(date),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             }

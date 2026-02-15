@@ -165,26 +165,38 @@ class MainActivity : ComponentActivity() {
 
                     androidx.compose.material3.ModalNavigationDrawer(
                         drawerState = drawerState,
-                        gesturesEnabled = false,
+                        gesturesEnabled = drawerState.isOpen,
                         drawerContent = {
                             com.waph1.markitnotes.ui.AppDrawerContent(
                                 currentScreen = currentScreen,
                                 currentFilter = currentFilter,
                                 labels = labels,
-                                onScreenSelect = { viewModel.navigateTo(it) },
-                                onFilterSelect = { viewModel.setFilter(it) },
+                                onScreenSelect = { 
+                                    viewModel.navigateTo(it)
+                                    scope.launch { drawerState.close() }
+                                },
+                                onFilterSelect = { 
+                                    viewModel.setFilter(it)
+                                    scope.launch { drawerState.close() }
+                                },
                                 onCreateLabel = { showCreateLabelDialog = true },
                                 onDeleteLabel = { labelToDelete = it },
                                 closeDrawer = { scope.launch { drawerState.close() } }
                             )
                         }
                     ) {
+                         // Close drawer on back press if open
+                         androidx.activity.compose.BackHandler(enabled = drawerState.isOpen) {
+                             scope.launch { drawerState.close() }
+                         }
+
                          androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
                              when (currentScreen) {
                                  MainViewModel.Screen.Dashboard -> {
                                      DashboardScreen(
                                          viewModel = viewModel,
                                          listState = listState,
+                                         isDrawerOpen = drawerState.isOpen,
                                          onSelectFolder = { openDocumentTreeLauncher.launch(null) },
                                          onNoteClick = { note -> viewModel.openNote(note) },
                                          onFabClick = { viewModel.createNote() },

@@ -124,6 +124,54 @@ class MainViewModel(
         result
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val uiItems: StateFlow<List<DashboardUiItem>> = combine(
+        notes,
+        _currentFilter,
+        _isSearchEverywhere,
+        _searchQuery
+    ) { notesList, filter, isGlobalSearch, query ->
+        val list = mutableListOf<DashboardUiItem>()
+        val usedKeys = mutableSetOf<String>()
+
+        fun addUnique(item: DashboardUiItem) {
+            if (usedKeys.add(item.key)) {
+                list.add(item)
+            }
+        }
+        
+        if (isGlobalSearch) {
+            addUnique(DashboardUiItem.HeaderItem(DashboardUiItem.HeaderType.SEARCH_EVERYWHERE))
+            notesList.forEach { addUnique(DashboardUiItem.NoteItem(it)) }
+        } else if (query.isNotBlank()) {
+            addUnique(DashboardUiItem.HeaderItem(DashboardUiItem.HeaderType.SEARCH_RESULTS))
+            notesList.forEach { addUnique(DashboardUiItem.NoteItem(it)) }
+        } else if (filter is NoteFilter.Trash || filter is NoteFilter.Archive) {
+            notesList.forEach { addUnique(DashboardUiItem.NoteItem(it)) }
+        } else {
+             val pinned = notesList.filter { it.isPinned && !it.isArchived }
+             val others = notesList.filter { !it.isPinned && !it.isArchived }
+             val archived = notesList.filter { it.isArchived }
+             val showSeparator = filter is NoteFilter.Label
+
+             if (pinned.isNotEmpty()) {
+                 addUnique(DashboardUiItem.HeaderItem(DashboardUiItem.HeaderType.PINNED))
+                 pinned.forEach { addUnique(DashboardUiItem.NoteItem(it)) }
+             }
+
+             if (pinned.isNotEmpty() && others.isNotEmpty()) {
+                 addUnique(DashboardUiItem.HeaderItem(DashboardUiItem.HeaderType.OTHERS))
+             }
+             others.forEach { addUnique(DashboardUiItem.NoteItem(it)) }
+
+             if (archived.isNotEmpty() && showSeparator) {
+                addUnique(DashboardUiItem.HeaderItem(DashboardUiItem.HeaderType.ARCHIVED))
+                archived.forEach { addUnique(DashboardUiItem.NoteItem(it)) }
+             }
+        }
+        addUnique(DashboardUiItem.SpacerItem)
+        list
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _tempLabels = MutableStateFlow<Set<String>>(emptySet())
 
     val labels: StateFlow<List<String>> = combine(
@@ -167,8 +215,11 @@ class MainViewModel(
     }
 
     fun openNote(note: Note) {
-        _currentNote.value = note
-        _isEditorOpen.value = true
+        viewModelScope.launch {
+            val fullNote = repository.getNote(note.file.path)
+            _currentNote.value = fullNote ?: note
+            _isEditorOpen.value = true
+        }
     }
 
     fun createNote() {
@@ -398,5 +449,22 @@ class MainViewModel(
         viewModelScope.launch {
             repository.emptyTrash()
         }
+    }
+}
+
+sealed interface DashboardUiItem {
+    val key: String
+    data class NoteItem(val note: Note) : DashboardUiItem {
+        override val key: String = note.file.path
+    }
+    data class HeaderItem(val type: HeaderType) : DashboardUiItem {
+        override val key: String = "header_${type.name}"
+    }
+    object SpacerItem : DashboardUiItem {
+        override val key: String = "spacer_bottom"
+    }
+    
+    enum class HeaderType {
+        PINNED, OTHERS, ARCHIVED, SEARCH_RESULTS, SEARCH_EVERYWHERE
     }
 }
