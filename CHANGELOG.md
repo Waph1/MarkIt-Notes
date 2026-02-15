@@ -4,6 +4,7 @@
 ### Added
 - **Navigation**: Improved drawer interaction. It can now be closed using the Android back button, clicking the screen overlay (scrim), or swipe-to-close.
 - **Code**: Extracted parsing logic into `NoteFormatUtils` for better maintenance.
+- **Optimization**: Optimized the entire codebase for better performance and resource management.
 
 ### Fixed
 - **UI**: Fixed a bug where headers and separators would disappear when Pinned notes were present due to duplicate item keys.
@@ -13,6 +14,7 @@
 
 ### Changed
 - **UX**: Completely disabled swipe-to-open gesture for the navigation drawer to prevent accidental triggers.
+- **UI**: Polished the entire user interface for a more refined and consistent look.
 - **UI**: Improved visual hierarchy by moving header separators to the top of section titles.
 - **Branding**: Reverted version text in sidebar for a cleaner interface.
 
