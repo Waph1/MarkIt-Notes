@@ -194,7 +194,8 @@ class RoomNoteRepository(
             targetFileDoc = targetDir.createFile("text/markdown", finalFileName)
         }
         
-        val fullContent = NoteFormatUtils.constructFileContent(note)
+        val existingContent = targetFileDoc?.let { readText(it) }
+        val fullContent = NoteFormatUtils.constructFileContent(note, existingContent)
         
         targetFileDoc?.let { doc ->
             context.contentResolver.openOutputStream(doc.uri, "wt")?.use { outputStream ->
