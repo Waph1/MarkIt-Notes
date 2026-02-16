@@ -1,4 +1,4 @@
-# MarkIt Notes (v0.6.0)
+# MarkIt Notes
 
 **MarkIt Notes** is a modern, beautiful, and privacy-focused Markdown note-taking app for Android. Designed with a clean Google Keep-inspired aesthetic, it puts your content first while giving you the power of Markdown formatting through a revolutionary **Hybrid Editing** experience.
 
