@@ -197,12 +197,18 @@ class RoomNoteRepository(
         val existingContent = targetFileDoc?.let { readText(it) }
         val fullContent = NoteFormatUtils.constructFileContent(note, existingContent)
         
+        var actualLastModified = System.currentTimeMillis()
         targetFileDoc?.let { doc ->
             context.contentResolver.openOutputStream(doc.uri, "wt")?.use { outputStream ->
                 OutputStreamWriter(outputStream).use { writer ->
                     writer.write(fullContent)
                 }
             }
+            actualLastModified = doc.lastModified()
+            if (actualLastModified == 0L) actualLastModified = System.currentTimeMillis()
+            
+            val pathKey = doc.uri.toString()
+            contentCache[pathKey] = Pair(actualLastModified, fullContent)
         }
         
         val entity = NoteEntity(
@@ -212,7 +218,7 @@ class RoomNoteRepository(
             title = finalTitle,
             contentPreview = note.content.take(200),
             content = note.content,
-            lastModifiedMs = System.currentTimeMillis(),
+            lastModifiedMs = actualLastModified,
             color = note.color,
             reminder = note.reminder,
             isPinned = note.isPinned,
@@ -450,7 +456,7 @@ class RoomNoteRepository(
             val toProcess = fsPaths.filter { path ->
                 val meta = fsFiles[path]!!
                 val dbNote = dbNotes[path]
-                dbNote == null || meta.lastModified > dbNote.lastModifiedMs
+                dbNote == null || meta.lastModified != dbNote.lastModifiedMs
             }
             
             // 4. Process updates (Read content only for changed files)

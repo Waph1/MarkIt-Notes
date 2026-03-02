@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.0] - 2026-03-02
+### Added
+- **Search**: Global search now queries across both active and archived notes simultaneously, with visual partitions for organized results.
+- **Editor**: Added "Delete completed items" option to the menu to quickly clear all crossed-out checkboxes in a note.
+- **Editor**: Multi-line list formatting. Selecting multiple lines and tapping list formatting allows bulk-applying checkboxes, bullets, or numbers.
+- **Editor**: Smart unification when selecting mixed lists; intelligently toggles or replaces numbers/bullets to ensure uniformly formatted markdown.
+
+### Fixed
+- **Sync**: Resolved an issue where notes modified externally might not precisely sync upon refresh due to external clock drift.
+- **Sync**: Improved internal file saving to capture precise filesystem modification times.
+- **Editor**: Fixed an issue where pressing "Enter" on a checked checklist item would automatically insert another checked item. It now inserts an empty, unchecked item.
+
 ## [0.6.2] - 2026-02-27
 ### Added
 - **Feature**: Permanent deletion for notes inside Trash.

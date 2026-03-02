@@ -217,20 +217,76 @@ fun EditorScreen(
         }
     }
     
-    // Helper to insert text at cursor
-    fun insertAtCursor(prefix: String, suffix: String = "") {
+    // Helper to insert text at cursor or modify selected lines
+    fun insertAtCursor(prefix: String, suffix: String = "", isListPrefix: Boolean = false) {
         val text = content.text
         val start = content.selection.min
         val end = content.selection.max
         val selectedText = text.substring(start, end)
         
-        val newText = text.substring(0, start) + prefix + selectedText + suffix + text.substring(end)
-        val newCursor = start + prefix.length + selectedText.length
-        
-        content = TextFieldValue(
-            text = newText,
-            selection = TextRange(newCursor)
-        )
+        if (isListPrefix && selectedText.contains("\n")) {
+            // Apply list prefix to each line in the selection
+            val lines = selectedText.split("\n")
+            
+            // Determine if ALL lines already have the target prefix
+            val allHaveTargetPrefix = lines.all { line ->
+                when (prefix) {
+                    "- [ ] " -> line.trimStart().matches(Regex("^- \\[[ xX]\\]\\s.*"))
+                    "1. " -> line.trimStart().matches(Regex("^\\d+\\.\\s.*"))
+                    "- " -> line.trimStart().matches(Regex("^[-*+]\\s.*")) && !line.trimStart().matches(Regex("^- \\[[ xX]\\]\\s.*"))
+                    else -> false
+                }
+            }
+
+            val newLines = lines.mapIndexed { index, line ->
+                val hasBullet = line.trimStart().startsWith("- ") || line.trimStart().startsWith("* ") || line.trimStart().startsWith("+ ")
+                val hasNum = line.trimStart().matches(Regex("^\\d+\\.\\s.*"))
+                val hasCheckbox = line.trimStart().matches(Regex("^- \\[[ xX]\\]\\s.*"))
+                
+                when (prefix) {
+                    "- [ ] " -> {
+                        if (allHaveTargetPrefix) line.replaceFirst(Regex("^- \\[[ xX]\\]\\s"), "") // remove all
+                        else if (hasCheckbox) line // leave existing checkbox exactly as is (checked or unchecked)
+                        else if (hasNum) line.replaceFirst(Regex("^\\d+\\.\\s"), prefix) // replace num
+                        else if (hasBullet) line.replaceFirst(Regex("^[-*+]\\s"), prefix) // replace bullet 
+                        else "$prefix$line"
+                    }
+                    "1. " -> {
+                        if (allHaveTargetPrefix) line.replaceFirst(Regex("^\\d+\\.\\s"), "") // remove all
+                        else if (hasNum) line.replaceFirst(Regex("^\\d+\\.\\s"), "${index + 1}. ") // re-number existing
+                        else if (hasCheckbox) line.replaceFirst(Regex("^- \\[[ xX]\\]\\s"), "${index + 1}. ") // replace box
+                        else if (hasBullet) line.replaceFirst(Regex("^[-*+]\\s"), "${index + 1}. ") // replace bullet
+                        else "${index + 1}. $line"
+                    }
+                    "- " -> {
+                        if (allHaveTargetPrefix) line.replaceFirst(Regex("^[-*+]\\s"), "") // remove all
+                        else if (hasBullet && !hasCheckbox) line // leave existing bullet as is
+                        else if (hasNum) line.replaceFirst(Regex("^\\d+\\.\\s"), prefix) // replace num
+                        else if (hasCheckbox) line.replaceFirst(Regex("^- \\[[ xX]\\]\\s"), prefix) // replace box
+                        else "$prefix$line"
+                    }
+                    else -> "$prefix$line"
+                }
+            }
+            val newSelectedText = newLines.joinToString("\n")
+            
+            val newText = text.substring(0, start) + newSelectedText + text.substring(end)
+            val newCursor = start + newSelectedText.length
+            
+            content = TextFieldValue(
+                text = newText,
+                selection = TextRange(newCursor)
+            )
+        } else {
+            // Standard wrapping/insertion
+            val newText = text.substring(0, start) + prefix + selectedText + suffix + text.substring(end)
+            val newCursor = start + prefix.length + selectedText.length
+            
+            content = TextFieldValue(
+                text = newText,
+                selection = TextRange(newCursor)
+            )
+        }
     }
     
     // Back Handler
@@ -381,6 +437,21 @@ fun EditorScreen(
                                         }
                                     )
                                 }
+                                
+                                val hasCompletedItems = content.text.contains(Regex("- \\[[xX]\\]"))
+                                if (hasCompletedItems && !currentNoteObj.isTrashed) {
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text(androidx.compose.ui.res.stringResource(com.waph1.markitnotes.R.string.delete_completed_items)) },
+                                        leadingIcon = { Icon(Icons.Outlined.Delete, null) },
+                                        onClick = {
+                                            val newText = content.text.lines().filter { !it.trim().matches(Regex("^- \\[[xX]\\].*")) }.joinToString("\n")
+                                            content = TextFieldValue(text = newText)
+                                            saveNote() // Optional: force an immediate save
+                                            showMoreMenu = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -480,9 +551,9 @@ fun EditorScreen(
                                     }
                                 }
                             }
-                            item { ToolbarIconButton(text = "•", onClick = { insertAtCursor("- ") }) }
-                            item { ToolbarIconButton(text = "1.", onClick = { insertAtCursor("1. ") }) }
-                            item { ToolbarIconButton(text = "☐", onClick = { insertAtCursor("- [ ] ") }) }
+                            item { ToolbarIconButton(text = "•", onClick = { insertAtCursor("- ", isListPrefix = true) }) }
+                            item { ToolbarIconButton(text = "1.", onClick = { insertAtCursor("1. ", isListPrefix = true) }) }
+                            item { ToolbarIconButton(text = "☐", onClick = { insertAtCursor("- [ ] ", isListPrefix = true) }) }
                         }
                     }
                 }
@@ -560,12 +631,12 @@ fun EditorScreen(
                                 
                                 when {
                                     checkboxMatch != null -> {
-                                        val prefix = checkboxMatch.groups[1]!!.value
                                         val lineContent = checkboxMatch.groups[2]!!.value
                                         if (lineContent.trim().isEmpty()) {
                                             val clearedText = newText.substring(0, lastLineStart) + "\n" + newText.substring(newCursor)
                                             content = committedValue.copy(text = clearedText, selection = TextRange(lastLineStart + 1))
                                         } else {
+                                            val prefix = "- [ ] "
                                             val continuedText = newText.substring(0, newCursor) + prefix + newText.substring(newCursor)
                                             content = committedValue.copy(text = continuedText, selection = TextRange(newCursor + prefix.length))
                                         }

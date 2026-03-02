@@ -60,6 +60,7 @@
     <string name="unarchive">Unarchive</string>
     <string name="delete">Delete</string>
     <string name="delete_permanently">Delete Permanently</string>
+    <string name="delete_completed_items">Delete completed items</string>
     <string name="done">Done</string>
     <string name="back">Back</string>
     <string name="label">Label</string>

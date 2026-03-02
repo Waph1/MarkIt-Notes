@@ -91,13 +91,19 @@ class MainViewModel(
             notesList
         } else {
             val q = query.lowercase()
-            val filteredResults = notesList.filter { 
+            val searchBase = if (currentFilterValue is NoteFilter.All || currentFilterValue is NoteFilter.Archive) {
+                allNotesList.filter { !it.isTrashed }
+            } else {
+                notesList
+            }
+            
+            val filteredResults = searchBase.filter { 
                 it.title.lowercase().contains(q) || it.content.lowercase().contains(q)
             }
             
-            if (filteredResults.isEmpty() && currentFilterValue !is NoteFilter.Trash) {
+            if (filteredResults.isEmpty() && currentFilterValue is NoteFilter.Label) {
                 val globalResults = allNotesList.filter {
-                    it.title.lowercase().contains(q) || it.content.lowercase().contains(q)
+                    !it.isTrashed && (it.title.lowercase().contains(q) || it.content.lowercase().contains(q))
                 }
                 _isSearchEverywhere.value = globalResults.isNotEmpty()
                 globalResults
@@ -139,12 +145,31 @@ class MainViewModel(
             }
         }
         
-        if (isGlobalSearch) {
-            addUnique(DashboardUiItem.HeaderItem(DashboardUiItem.HeaderType.SEARCH_EVERYWHERE))
-            notesList.forEach { addUnique(DashboardUiItem.NoteItem(it)) }
-        } else if (query.isNotBlank()) {
-            addUnique(DashboardUiItem.HeaderItem(DashboardUiItem.HeaderType.SEARCH_RESULTS))
-            notesList.forEach { addUnique(DashboardUiItem.NoteItem(it)) }
+        if (query.isNotBlank()) {
+            if (filter is NoteFilter.Trash) {
+                if (isGlobalSearch) {
+                    addUnique(DashboardUiItem.HeaderItem(DashboardUiItem.HeaderType.SEARCH_EVERYWHERE))
+                } else {
+                    addUnique(DashboardUiItem.HeaderItem(DashboardUiItem.HeaderType.SEARCH_RESULTS))
+                }
+                notesList.forEach { addUnique(DashboardUiItem.NoteItem(it)) }
+            } else {
+                val active = notesList.filter { !it.isArchived }
+                val archived = notesList.filter { it.isArchived }
+                
+                if (isGlobalSearch) {
+                    addUnique(DashboardUiItem.HeaderItem(DashboardUiItem.HeaderType.SEARCH_EVERYWHERE))
+                } else if (active.isNotEmpty() || archived.isEmpty()) {
+                    addUnique(DashboardUiItem.HeaderItem(DashboardUiItem.HeaderType.SEARCH_RESULTS))
+                }
+                
+                active.forEach { addUnique(DashboardUiItem.NoteItem(it)) }
+                
+                if (archived.isNotEmpty()) {
+                    addUnique(DashboardUiItem.HeaderItem(DashboardUiItem.HeaderType.ARCHIVED))
+                    archived.forEach { addUnique(DashboardUiItem.NoteItem(it)) }
+                }
+            }
         } else if (filter is NoteFilter.Trash || filter is NoteFilter.Archive) {
             notesList.forEach { addUnique(DashboardUiItem.NoteItem(it)) }
         } else {

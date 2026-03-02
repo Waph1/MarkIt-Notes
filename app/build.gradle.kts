@@ -12,8 +12,8 @@ android {
         applicationId = "com.waph1.markitnotes"
         minSdk = 24
         targetSdk = 34
-        versionCode = 13
-        versionName = "0.6.2"
+        versionCode = 14
+        versionName = "0.7.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
